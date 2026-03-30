@@ -1,4 +1,12 @@
+# Ignore raw data and large outputs
 data/
 results/
-*.err
+*.root
+*.h5
+*.npz
 *.out
+*.log
+
+# Python / notebooks
+__pycache__/
+.ipynb_checkpoints/
