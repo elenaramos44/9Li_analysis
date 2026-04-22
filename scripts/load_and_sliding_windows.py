@@ -116,9 +116,9 @@ def main():
 
     
     #sliding window parameters
-    window_ns = 25
+    window_ns = 20
     nHits_min = 15
-    nHits_max = 40
+    nHits_max = 500
     death_window = 0  # ya gestionamos no solapamiento
 
     rows = []
