@@ -5,9 +5,9 @@ from glob import glob
 import os
 
 # --- CAMBIO 1: El patrón de búsqueda ahora incluye '_chi2' ---
-input_files = glob("/scratch/elena/9Li/results/run1848/multilat_output/*_multilat_chi2.csv")
+input_files = glob("/scratch/elena/9Li/results/run1846/multilat_output/*_multilat_chi2.csv")
 
-outdir = "/scratch/elena/9Li/results/run1848/processed"
+outdir = "/scratch/elena/9Li/results/run1846/processed"
 os.makedirs(outdir, exist_ok=True)
 
 for f in input_files:

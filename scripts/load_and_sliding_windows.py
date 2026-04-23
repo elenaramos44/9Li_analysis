@@ -77,7 +77,6 @@ def main():
     ]
     
 
-
     # parallelization --> chunks
     start_entry = chunk_id * chunk_size
     stop_entry = start_entry + chunk_size
@@ -118,10 +117,14 @@ def main():
     #sliding window parameters
     window_ns = 20
     nHits_min = 15
-    nHits_max = 500
-    death_window = 0  # ya gestionamos no solapamiento
+    nHits_max = 100
+    death_window = 0  
+    boundary_cut = nHits_max - 1
+
 
     rows = []
+    spill_stats = [] # To store cluster counts per spill
+
 
     # Loop per spill
     for spill in np.unique(hit_spill_ids):
@@ -139,11 +142,6 @@ def main():
         mask_Li9 = (times_spill >= t_start) & (times_spill <= t_end)
         times_Li9 = times_spill[mask_Li9]
 
-        card_Li9 = hit_card_ids[mask_spill][mask_Li9]
-        slot_Li9 = hit_slot_ids[mask_spill][mask_Li9]
-        channel_Li9 = hit_channel_ids[mask_spill][mask_Li9]
-        position_Li9 = hit_position_ids[mask_spill][mask_Li9]
-        charge_Li9 = hit_charges[mask_spill][mask_Li9]
 
         if len(times_Li9) == 0:
             continue
@@ -158,14 +156,30 @@ def main():
             charge_branch_event=[]   # explícito para evitar ambigüedad futura
         )
 
+        valid_indices = [i for i, nh in enumerate(nHits_list) if nh < boundary_cut]
+        num_clusters_in_spill = len(valid_indices)    #activity metric
+        
+        # Save spill activity info
+        spill_stats.append({
+            "run": run,
+            "spill_id": spill,
+            "cluster_count": num_clusters_in_spill
+        })
+
+        card_Li9 = hit_card_ids[mask_spill][mask_Li9]
+        slot_Li9 = hit_slot_ids[mask_spill][mask_Li9]
+        channel_Li9 = hit_channel_ids[mask_spill][mask_Li9]
+        position_Li9 = hit_position_ids[mask_spill][mask_Li9]
+        charge_Li9 = hit_charges[mask_spill][mask_Li9]
+
         if verbose:
             print(f"Spill {spill}: {len(t_window_start)} candidates")
 
 
-        
-
         #save results
-        for t0, nhits in zip(t_window_start, nHits_list):
+        for idx in valid_indices:
+            t0 = t_window_start[idx]
+            nhits = nHits_list[idx]
             mask_cluster = (times_Li9 >= t0) & (times_Li9 < t0 + window_ns)
             
             rows.append({
@@ -173,6 +187,7 @@ def main():
                 "t_window_start_rel_ns": t0 - t_start,     #rel time within the sw
                 "nHits": nhits,
                 "spill_id": spill,
+                "nCLusters_in_spill": num_clusters_in_spill,
 
                 "hit_card_ids": card_Li9[mask_cluster].tolist(),
                 "hit_slot_ids": slot_Li9[mask_cluster].tolist(),
