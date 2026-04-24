@@ -4,7 +4,6 @@ import ast
 from glob import glob
 import os
 
-# --- CAMBIO 1: El patrón de búsqueda ahora incluye '_chi2' ---
 input_files = glob("/scratch/elena/9Li/results/run1846/multilat_output/*_multilat_chi2.csv")
 
 outdir = "/scratch/elena/9Li/results/run1846/processed"
@@ -22,7 +21,7 @@ for f in input_files:
              df[col] = df[col].apply(ast.literal_eval)
 
     # Guardar como PKL (Binary format)
-    # --- CAMBIO 2: Cambiamos el sufijo del nombre de salida ---
+    #cambiar de .csv a .pkl
     outname = os.path.basename(f).replace("_multilat_chi2.csv", ".pkl")
     df.to_pickle(os.path.join(outdir, outname))
 

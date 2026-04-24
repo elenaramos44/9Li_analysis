@@ -58,7 +58,7 @@ def run_multilateration_candidate(
         idx = np.array(keep_idx)
         times, x_pmt, y_pmt, z_pmt = times_s[idx], x_s[idx], y_s[idx], z_s[idx]
 
-    # Mínimo de hits para un fit de 4 parámetros (x,y,z,t0)
+    #Mínimo de hits para un fit de 4 parámetros (x,y,z,t0)
     if len(times) < 6:
         return {"x": np.nan, "y": np.nan, "z": np.nan, "eps": np.nan,
                 "success": False, "n_hits_used": int(len(times)), "result": None}
@@ -77,7 +77,7 @@ def run_multilateration_candidate(
     eps_guess = float(np.median(times_rel - tof0))
     x0 = np.array([0., 0., 0., eps_guess], dtype=float)
 
-    # Función de residuos (pulls)
+    #función de residuos (pulls)
     def rho(pars):
         loc, eps = pars[0:3], pars[3]
         tofs = np.linalg.norm(pmt_locs - loc, axis=1) / vc

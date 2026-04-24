@@ -19,7 +19,7 @@ def parse_args():
 
 def run_multilat_full_info(row, verbose=False):
     """
-    Runs updated multilateration and extracts Chi2, NDoF and Time RMS.
+    Runs updated multilateration and extracts chi2, ndof, t_rms and chi2_ndof.
     """
     times = np.array(row['hit_times_ns'])
     mpmt_ids = np.array(row['hit_slot_ids'])
@@ -30,7 +30,7 @@ def run_multilat_full_info(row, verbose=False):
     mpmt_ids = mpmt_ids[valid_mask]
     pmt_ids = pmt_ids[valid_mask]
 
-    # Estructura de datos actualizada con las nuevas métricas
+
     res_data = {
         "vertex_x": np.nan,
         "vertex_y": np.nan,
@@ -47,7 +47,6 @@ def run_multilat_full_info(row, verbose=False):
         return res_data
 
     try:
-        # Ejecutamos la nueva versión que devuelve chi2 y pulls
         vertex = functions_multilateration.run_multilateration_candidate(
             times, mpmt_ids, pmt_ids,
             sigma_t=1.0,
@@ -56,7 +55,6 @@ def run_multilat_full_info(row, verbose=False):
         )
 
         if vertex["success"]:
-            # Extraemos el time_rms de los pulls (residuos) que ahora devuelve la función
             residuals = vertex["pulls"]
             time_rms = np.std(residuals)
 

@@ -137,7 +137,7 @@ def main():
 
         # define Li9 window
         t_end = np.max(times_spill)
-        t_start = t_end - 0.5e9  # 0.5 s in ns
+        t_start = t_end - 0.48e9  # 0.5 s in ns
 
         mask_Li9 = (times_spill >= t_start) & (times_spill <= t_end)
         times_Li9 = times_spill[mask_Li9]
