@@ -9,9 +9,7 @@ def calculate_chunks(file_path, chunk_size):
         return
 
     try:
-        # Open the file and access the WCSim tree
         with uproot.open(file_path) as file:
-            # Common WCSim tree name is 'wcsimT'
             tree = file["WCTEReadoutWindows"]
             total_events = tree.num_entries
             
