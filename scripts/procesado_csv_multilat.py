@@ -6,7 +6,7 @@ import os
 
 input_files = glob("/scratch/elena/9Li/results/run1848/multilat_output/*_multilat_chi2.csv")
 
-outdir = "/scratch/elena/9Li/results/run1846/processed"
+outdir = "/scratch/elena/9Li/results/run1848/processed"
 os.makedirs(outdir, exist_ok=True)
 
 for f in input_files:
