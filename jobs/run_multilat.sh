@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
-#SBATCH --array=0-47
+#SBATCH --array=0-49
 
 
 echo "Setting environment for multilateration"
@@ -35,7 +35,7 @@ export ROOT_INCLUDE_PATH=$BONSAIDIR/bonsai:/scratch/elena/wcsim-install/include/
 echo "Environment ready (multilateration)"
 
 
-RUN=1848
+RUN=1846
 
 IN_DIR=/scratch/elena/9Li/results/run${RUN}
 OUT_DIR=/scratch/elena/9Li/results/run${RUN}/multilat_output

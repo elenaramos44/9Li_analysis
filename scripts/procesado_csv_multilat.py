@@ -4,7 +4,7 @@ import ast
 from glob import glob
 import os
 
-input_files = glob("/scratch/elena/9Li/results/run1848/multilat_output/*_multilat_chi2.csv")
+input_files = glob("/scratch/elena/9Li/results/run1846/multilat_output/*_multilat_chi2.csv")
 
 outdir = "/scratch/elena/9Li/results/run1848/processed"
 os.makedirs(outdir, exist_ok=True)

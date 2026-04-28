@@ -116,8 +116,8 @@ def main():
     
     #sliding window parameters
     window_ns = 20
-    nHits_min = 15
-    nHits_max = 40
+    nHits_min = 35
+    nHits_max = 45
     death_window = 0  
     boundary_cut = nHits_max - 1
 
