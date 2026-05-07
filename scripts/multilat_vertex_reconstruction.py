@@ -23,7 +23,7 @@ def run_multilat_full_info(row, verbose=False):
     """
     times = np.array(row['hit_times_ns'])
     mpmt_ids = np.array(row['hit_slot_ids'])
-    pmt_ids  = np.array(row['hit_channel_ids'])
+    pmt_ids  = np.array(row['hit_position_ids'])   #in the merged_prodution there's no hit_mpmt_card_ids, either hit_pmt_channel_id
 
     valid_mask = (mpmt_ids >= 0) & (pmt_ids >= 0) & np.isfinite(times)
     times = times[valid_mask]
@@ -88,7 +88,7 @@ def main():
 
     # Load cluster data
     df = pd.read_csv(args.csv, converters={
-        'hit_times_ns': eval, 'hit_slot_ids': eval, 'hit_channel_ids': eval
+        'hit_times_ns': eval, 'hit_slot_ids': eval, 'hit_position_ids': eval
     })
 
     if args.verbose:

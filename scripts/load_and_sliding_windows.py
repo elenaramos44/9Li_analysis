@@ -56,7 +56,7 @@ def main():
     base_path = args.base_path
     verbose = args.verbose
 
-    filename = os.path.join(base_path, f"WCTE_offline_R{run}S0_VME_matched.root")
+    filename = os.path.join(base_path, f"WCTE_merged_production_R{run}.root")
     if verbose:
         print(f"Opening file: {filename}")
 
@@ -69,8 +69,6 @@ def main():
         "spill_counter",
         "hit_pmt_calibrated_times",
 
-        "hit_mpmt_card_ids",
-        "hit_pmt_channel_ids",
         "hit_mpmt_slot_ids",
         "hit_pmt_position_ids",
         "hit_pmt_charges"
@@ -91,9 +89,9 @@ def main():
 
     # flatten hits for relative times within each window
     hit_times_ns = ak.to_numpy(ak.flatten(arrays.hit_pmt_calibrated_times))
-    hit_card_ids = ak.to_numpy(ak.flatten(arrays.hit_mpmt_card_ids))
+    #hit_card_ids = ak.to_numpy(ak.flatten(arrays.hit_mpmt_card_ids))
     hit_slot_ids = ak.to_numpy(ak.flatten(arrays.hit_mpmt_slot_ids))
-    hit_channel_ids = ak.to_numpy(ak.flatten(arrays.hit_pmt_channel_ids))
+    #hit_channel_ids = ak.to_numpy(ak.flatten(arrays.hit_pmt_channel_ids))
     hit_position_ids = ak.to_numpy(ak.flatten(arrays.hit_pmt_position_ids))
     hit_charges = ak.to_numpy(ak.flatten(arrays.hit_pmt_charges))
 
@@ -116,8 +114,8 @@ def main():
     
     #sliding window parameters
     window_ns = 20
-    nHits_min = 35
-    nHits_max = 45
+    nHits_min = 15
+    nHits_max = 50
     death_window = 0  
     boundary_cut = nHits_max - 1
 
@@ -166,9 +164,9 @@ def main():
             "cluster_count": num_clusters_in_spill
         })
 
-        card_Li9 = hit_card_ids[mask_spill][mask_Li9]
+        #card_Li9 = hit_card_ids[mask_spill][mask_Li9]
         slot_Li9 = hit_slot_ids[mask_spill][mask_Li9]
-        channel_Li9 = hit_channel_ids[mask_spill][mask_Li9]
+        #channel_Li9 = hit_channel_ids[mask_spill][mask_Li9]
         position_Li9 = hit_position_ids[mask_spill][mask_Li9]
         charge_Li9 = hit_charges[mask_spill][mask_Li9]
 
@@ -189,9 +187,7 @@ def main():
                 "spill_id": spill,
                 "nCLusters_in_spill": num_clusters_in_spill,
 
-                "hit_card_ids": card_Li9[mask_cluster].tolist(),
                 "hit_slot_ids": slot_Li9[mask_cluster].tolist(),
-                "hit_channel_ids": channel_Li9[mask_cluster].tolist(),
                 "hit_position_ids": position_Li9[mask_cluster].tolist(),
                 "hit_times_ns": times_Li9[mask_cluster].tolist(),
                 "hit_charges": charge_Li9[mask_cluster].tolist()
@@ -205,7 +201,7 @@ def main():
 
 
     os.makedirs(outdir, exist_ok=True)
-    out_file = os.path.join(outdir, f"Li9_clusters_chunk_{chunk_id}.csv")
+    out_file = os.path.join(outdir, f"Li9_clusters_range({nHits_min}-{nHits_max})_chunk_{chunk_id}.csv")
     df.to_csv(out_file, index=False)
 
     if verbose:

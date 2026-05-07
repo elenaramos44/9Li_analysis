@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
-#SBATCH --array=0-49
+#SBATCH --array=0-92
 
 
 echo "Setting environment for multilateration"
@@ -35,7 +35,7 @@ export ROOT_INCLUDE_PATH=$BONSAIDIR/bonsai:/scratch/elena/wcsim-install/include/
 echo "Environment ready (multilateration)"
 
 
-RUN=1846
+RUN=1941
 
 IN_DIR=/scratch/elena/9Li/results/run${RUN}
 OUT_DIR=/scratch/elena/9Li/results/run${RUN}/multilat_output
@@ -44,9 +44,8 @@ SCRIPT=/scratch/elena/9Li/scripts/multilat_vertex_reconstruction.py
 mkdir -p $OUT_DIR
 
 
-
 TASK_ID=${SLURM_ARRAY_TASK_ID}
-CSV_FILE=${IN_DIR}/Li9_clusters_chunk_${TASK_ID}.csv
+CSV_FILE="${IN_DIR}/Li9_clusters_range(15-50)_chunk_${TASK_ID}.csv"   #CAMBIAR EL RANGO!!!
 
 echo "------------------------------"
 echo "Run: $RUN"

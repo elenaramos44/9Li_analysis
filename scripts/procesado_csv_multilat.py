@@ -4,9 +4,9 @@ import ast
 from glob import glob
 import os
 
-input_files = glob("/scratch/elena/9Li/results/run1846/multilat_output/*_multilat_chi2.csv")
+input_files = glob("/scratch/elena/9Li/results/run1941/multilat_output/*_multilat_chi2.csv")
 
-outdir = "/scratch/elena/9Li/results/run1848/processed"
+outdir = "/scratch/elena/9Li/results/run1941/processed"
 os.makedirs(outdir, exist_ok=True)
 
 for f in input_files:
@@ -16,7 +16,7 @@ for f in input_files:
 
     # Convertir las columnas de listas (importante para que el PKL sea útil)
     # Usamos get() o comprobamos si existen para evitar errores si algún chunk falló
-    for col in ['hit_times_ns', 'hit_slot_ids', 'hit_channel_ids']:
+    for col in ['hit_times_ns', 'hit_slot_ids', 'hit_position_ids']:
         if col in df.columns:
              df[col] = df[col].apply(ast.literal_eval)
 

@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
-#SBATCH --array=0-49       #python3 /scratch/elena/9Li/scripts/get_chunks.py /data/elena/data/WCTE_offline_R{RUN}S0_VME_matched.root
+#SBATCH --array=0-92    #python3 /scratch/elena/9Li/scripts/get_chunks.py /data/elena/data/WCTE_offline_R{RUN}S0_VME_matched.root
 
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
@@ -23,11 +23,11 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scratch/elena/wcsim-install/lib
 echo "WCSim environment setup ready"
 
 
-RUN=1846
+RUN=1941
 CHUNK_SIZE=25000
 OUTDIR=/scratch/elena/9Li/results/run${RUN}
 SCRIPT=/scratch/elena/9Li/scripts/load_and_sliding_windows.py
-BASE_PATH=/data/elena/data
+BASE_PATH=/data/elena/data/p_260
 
 mkdir -p $OUTDIR
 
