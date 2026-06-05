@@ -16,35 +16,63 @@ def parse_args():
     parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
 
-def nHitsTimeWindow(times_branch_event_arg, threshold_inf, window, death_window=0, charge_branch_event=[], threshold_sup=np.inf):
+def default_time_rms_fun(times_in_win, t_start, window):
     """
-    Sliding window optimized: si cumple el criterio de hits, se guarda y la siguiente ventana
-    empieza justo después de terminar la actual (no solapamientos). Si no cumple, avanzamos al siguiente hit.
-    uso de np.searchsorted para saltar directamente al final de la ventana.
+    Función auxiliar por defecto para calcular el RMS del tiempo 
+    respecto a la media de los tiempos dentro de la ventana.
     """
-    times_branch_event = np.sort(times_branch_event_arg.copy())
-    threshold_times = []
-    nhits_range = []
-    n = len(times_branch_event)
+    if len(times_in_win) == 0:
+        return 0.0, 0.0
+    mean_t = np.mean(times_in_win)
+    rms_t = np.sqrt(np.mean((times_in_win - mean_t) ** 2))
+    return rms_t, mean_t
+
+def nHitstRMSTimeWindow(
+    times_branch_event_arg,
+    threshold_inf,
+    window,
+    death_window,
+    time_rms_fun=default_time_rms_fun,
+    rms_cut_ns=10.0,
+    threshold_sup=np.inf,     # reject if count >= threshold_sup
+):
+    """
+    Sliding window finder optimizado que implementa cortes por RMS de tiempo y umbral superior.
+    Usa np.searchsorted para mantener la eficiencia del script original de saltos rápidos.
+    """
+    times = np.sort(np.asarray(times_branch_event_arg, float))
+    n = len(times)
+
+    cand_times = []
+    cand_nhits = []
+    cand_trms  = []
+
     i = 0
-
     while i < n:
-        t_hit = times_branch_event[i]                                                       #cada hit define el inicio de una ventna
-        idx_end = np.searchsorted(times_branch_event, t_hit + window, side='right')         #busca el índice del primer hit fuera de la ventana
-        if len(charge_branch_event) != 0:
-            count = max(charge_branch_event[i:idx_end])  #podríamos usar charge
-        else:
-            count = idx_end - i                          #usamos counts = number of hits
+        t_start = times[i]
+        # Optimización usando searchsorted igual que en tu función anterior
+        idx_end = np.searchsorted(times, t_start + window, side='right')
+        count = idx_end - i
 
-        if count > threshold_inf and count < threshold_sup:       #cluster selection cuts
-            threshold_times.append(t_hit)
-            nhits_range.append(count)                             #guardamos cluster si se cumple la condición
-            
-            i = np.searchsorted(times_branch_event, t_hit + window + death_window, side='right')         #if candidtae, jump to the next hit after the sw   
-        else:
-            i += 1                                                                                       #if not, just go to the next hit and open new sw
+        if count >= threshold_inf:
+            # Extraemos los tiempos correspondientes a la ventana actual
+            times_in_win = times[i:idx_end]
+            t_rms, _ = time_rms_fun(times_in_win, t_start, window)
+            t_rms = float(t_rms)
 
-    return np.array(threshold_times), np.array(nhits_range)
+            # Se aplican los cortes de rechazo reglamentarios
+            if (t_rms <= rms_cut_ns) and (count < threshold_sup):
+                cand_times.append(float(t_start))
+                cand_nhits.append(count)
+                cand_trms.append(t_rms)
+
+            # Lockout region utilizando searchsorted para saltar de forma eficiente
+            t_skip_until = t_start + window + death_window
+            i = np.searchsorted(times, t_skip_until, side='right')
+        else:
+            i += 1
+
+    return np.array(cand_times), np.array(cand_nhits), np.array(cand_trms)
 
 
 def main():
@@ -63,18 +91,15 @@ def main():
     f = uproot.open(filename)
     tree = f["WCTEReadoutWindows"]
 
-
     branches = [
         "window_time",
         "spill_counter",
         "hit_pmt_calibrated_times",
-
         "hit_mpmt_slot_ids",
         "hit_pmt_position_ids",
         "hit_pmt_charges"
     ]
     
-
     # parallelization --> chunks
     start_entry = chunk_id * chunk_size
     stop_entry = start_entry + chunk_size
@@ -89,14 +114,11 @@ def main():
 
     # flatten hits for relative times within each window
     hit_times_ns = ak.to_numpy(ak.flatten(arrays.hit_pmt_calibrated_times))
-    #hit_card_ids = ak.to_numpy(ak.flatten(arrays.hit_mpmt_card_ids))
-    hit_slot_ids = ak.to_numpy(ak.flatten(arrays.hit_mpmt_slot_ids))
-    #hit_channel_ids = ak.to_numpy(ak.flatten(arrays.hit_pmt_channel_ids))
-    hit_position_ids = ak.to_numpy(ak.flatten(arrays.hit_pmt_position_ids))
+    slot_ids = ak.to_numpy(ak.flatten(arrays.hit_mpmt_slot_ids))
+    position_ids = ak.to_numpy(ak.flatten(arrays.hit_pmt_position_ids))
     hit_charges = ak.to_numpy(ak.flatten(arrays.hit_pmt_charges))
 
-
-    hit_window_idx = ak.to_numpy(                                               #asigna sw correspondientes a los hits
+    hit_window_idx = ak.to_numpy(                                               
         ak.flatten(
             ak.broadcast_arrays(
                 np.arange(len(window_times_ns)),
@@ -110,19 +132,16 @@ def main():
 
     if verbose:
         print(f"Total hits in chunk: {len(abs_hit_times_ns)}")
-
     
-    #sliding window parameters
+    # sliding window parameters
     window_ns = 20
     nHits_min = 15
     nHits_max = 50
     death_window = 0  
-    boundary_cut = nHits_max - 1
-
+    rms_cut_ns = 10.0
 
     rows = []
     spill_stats = [] # To store cluster counts per spill
-
 
     # Loop per spill
     for spill in np.unique(hit_spill_ids):
@@ -140,22 +159,23 @@ def main():
         mask_Li9 = (times_spill >= t_start) & (times_spill <= t_end)
         times_Li9 = times_spill[mask_Li9]
 
-
         if len(times_Li9) == 0:
             continue
 
-        # sliding window on THIS SPILL only
-        t_window_start, nHits_list = nHitsTimeWindow(
+        # sliding window on THIS SPILL only con la nueva función integrada
+        t_window_start, nHits_list, t_rms_list = nHitstRMSTimeWindow(
             times_Li9,
             threshold_inf=nHits_min,
             threshold_sup=nHits_max,
             window=window_ns,
             death_window=death_window,
-            charge_branch_event=[]   # explícito para evitar ambigüedad futura
+            rms_cut_ns=rms_cut_ns,
+            time_rms_fun=default_time_rms_fun
         )
 
-        valid_indices = [i for i, nh in enumerate(nHits_list) if nh < boundary_cut]
-        num_clusters_in_spill = len(valid_indices)    #activity metric
+        # La nueva función ya filtra por threshold_sup y rms_cut_ns internamente.
+        # Todos los índices devueltos son válidos.
+        num_clusters_in_spill = len(t_window_start)    # activity metric
         
         # Save spill activity info
         spill_stats.append({
@@ -164,26 +184,25 @@ def main():
             "cluster_count": num_clusters_in_spill
         })
 
-        #card_Li9 = hit_card_ids[mask_spill][mask_Li9]
-        slot_Li9 = hit_slot_ids[mask_spill][mask_Li9]
-        #channel_Li9 = hit_channel_ids[mask_spill][mask_Li9]
-        position_Li9 = hit_position_ids[mask_spill][mask_Li9]
+        slot_Li9 = slot_ids[mask_spill][mask_Li9]
+        position_Li9 = position_ids[mask_spill][mask_Li9]
         charge_Li9 = hit_charges[mask_spill][mask_Li9]
 
         if verbose:
             print(f"Spill {spill}: {len(t_window_start)} candidates")
 
-
-        #save results
-        for idx in valid_indices:
+        # save results
+        for idx in range(num_clusters_in_spill):
             t0 = t_window_start[idx]
             nhits = nHits_list[idx]
+            trms = t_rms_list[idx]
             mask_cluster = (times_Li9 >= t0) & (times_Li9 < t0 + window_ns)
             
             rows.append({
-                "t_window_start_ns": t0,                   #abs time of the run
-                "t_window_start_rel_ns": t0 - t_start,     #rel time within the sw
+                "t_window_start_ns": t0,                   # abs time of the run
+                "t_window_start_rel_ns": t0 - t_start,     # rel time within the sw
                 "nHits": nhits,
+                "t_rms_ns": trms,                          # añadida métrica calculada al output
                 "spill_id": spill,
                 "nCLusters_in_spill": num_clusters_in_spill,
 
@@ -193,12 +212,10 @@ def main():
                 "hit_charges": charge_Li9[mask_cluster].tolist()
             })
 
- 
     df = pd.DataFrame(rows)
 
     if verbose:
         print(f"Total selected windows in chunk: {len(df)}")
-
 
     os.makedirs(outdir, exist_ok=True)
     out_file = os.path.join(outdir, f"Li9_clusters_range({nHits_min}-{nHits_max})_chunk_{chunk_id}.csv")
