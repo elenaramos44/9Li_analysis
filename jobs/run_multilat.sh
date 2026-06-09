@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
-#SBATCH --array=0-47
+#SBATCH --array=0-289%50
 
 
 echo "Setting environment for multilateration"

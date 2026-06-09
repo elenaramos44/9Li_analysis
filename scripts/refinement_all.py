@@ -86,7 +86,7 @@ def main():
     processed_folder = f"/scratch/elena/9Li/results/run{args.run}/processed"
     
     # Locate the unique input file containing the specified chunk ID
-    search_pattern = f"{processed_folder}/*(15-50)*chunk_{args.chunk_id}.pkl"
+    search_pattern = f"{processed_folder}/*chunk_{args.chunk_id}_BKG.pkl"
     matching_files = glob.glob(search_pattern)
     
     if not matching_files:
@@ -94,7 +94,7 @@ def main():
         sys.exit(1)
         
     input_filepath = matching_files[0]
-    output_filename = f"Refine_Li9_clusters_chunk_{args.chunk_id}.pkl"
+    output_filename = f"Refine_Li9_clusters_chunk_{args.chunk_id}_BKG.pkl"
     output_filepath = os.path.join(processed_folder, output_filename)
     
     print(f"Loading Geometry Mapping...")

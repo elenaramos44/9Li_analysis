@@ -39,7 +39,7 @@ def main():
                     df[col] = df[col].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
             # Change extension from .csv to .pkl
-            outname = os.path.basename(f).replace("_multilat_chi2.csv", ".pkl")
+            outname = os.path.basename(f).replace("_multilat_chi2.csv", "_BKG.pkl")
             df.to_pickle(os.path.join(outdir, outname))
         except Exception as e:
             print(f"Error processing file {f}: {e}")

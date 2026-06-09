@@ -108,7 +108,7 @@ def main():
     df_final = pd.DataFrame(results)
     
     os.makedirs(args.outdir, exist_ok=True)
-    out_name = os.path.basename(args.csv).replace(".csv", "_multilat_chi2.csv")
+    out_name = os.path.basename(args.csv).replace("_bkg.csv", "_multilat_chi2.csv")
     out_path = os.path.join(args.outdir, out_name)
     
     df_final.to_csv(out_path, index=False)

@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --qos=regular
 #SBATCH --job-name=Li9_to_pkl
-#SBATCH --output=/scratch/elena/9Li/results/log/%A/pkl_task_%a.out
-#SBATCH --error=/scratch/elena/9Li/results/log/%A/pkl_task_%a.err
+#SBATCH --output=/scratch/elena/9Li/results/log/pkl_task_%A_%a.out
+#SBATCH --error=/scratch/elena/9Li/results/log/pkl_task_%A_%a.err
 #SBATCH --partition=general
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -11,15 +11,12 @@
 #SBATCH --time=1:00:00
 #SBATCH --array=0-11    # 12 runs
 
-
-mkdir -p /scratch/elena/9Li/results/log/${SLURM_ARRAY_JOB_ID}
-
 echo "Setting environment for PKL conversion"
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
 
 
-RUNS=(1846 1848 1928 1930 1932 1934 1935 1936 1937 1938 1939 1941)
+RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848 )
 
 TARGET_RUN=${RUNS[${SLURM_ARRAY_TASK_ID}]}
 

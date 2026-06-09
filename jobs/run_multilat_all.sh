@@ -7,16 +7,13 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
-
-# Ejecuta los 846 chunks en total, manteniendo un máximo de 50 simultáneos
-#SBATCH --array=0-845%50
+#SBATCH --array=0-564%50
 
 # Organiza los logs de salida en una carpeta con el ID del Job
-#SBATCH --output=/scratch/elena/9Li/results/log/%A/multilat_task_%a.out
-#SBATCH --error=/scratch/elena/9Li/results/log/%A/multilat_task_%a.err
+#SBATCH --output=/scratch/elena/9Li/results/log/multilat_task_%A_%a.out
+#SBATCH --error=/scratch/elena/9Li/results/log/multilat_task_%A_%a.err
 
-# Crear el directorio de logs usando la variable de entorno real de Bash
-mkdir -p /scratch/elena/9Li/results/log/${SLURM_ARRAY_JOB_ID}
+
 
 echo "Setting environment for multilateration"
 
@@ -43,8 +40,11 @@ TASK_ID=${SLURM_ARRAY_TASK_ID}
 # ==============================================================================
 # LÓGICA DE MAPEO EXACTA (Idéntica al script anterior)
 # ==============================================================================
-RUNS=(1846 1848 1928 1930 1932 1934 1935 1936 1937 1938 1939 1941)
-CHUNKS_PER_RUN=(50 48 79 92 97 66 68 58 79 44 72 93) 
+RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
+#CHUNKS_PER_RUN=(50 48 79 92 97 66 68 58 79 44 72 93)   #raw data
+#CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33)    #filtered data
+CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16)     #bkg
+
 
 CURRENT_SUM=0
 TARGET_RUN=""
@@ -71,7 +71,7 @@ fi
 
 IN_DIR=/scratch/elena/9Li/results/run${TARGET_RUN}
 OUT_DIR=/scratch/elena/9Li/results/run${TARGET_RUN}/multilat_output
-CSV_FILE="${IN_DIR}/Li9_clusters_range(15-50)_chunk_${TARGET_CHUNK}.csv"
+CSV_FILE="${IN_DIR}/Li9_clusters_range(15-50)_chunk_${TARGET_CHUNK}_bkg.csv"
 
 # Crea la carpeta de salida si no existe (ej. /results/run1937/multilat_output/)
 mkdir -p $OUT_DIR

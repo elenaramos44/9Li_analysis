@@ -23,6 +23,7 @@ def calculate_chunks(file_path, chunk_size):
             print(f"Number of chunks: {num_chunks}")
             print(f"SLURM setting: --array=0-{max_array_index}")
             
+            
     except Exception as e:
         print(f"Error reading ROOT file: {e}")
 

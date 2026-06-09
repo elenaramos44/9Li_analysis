@@ -84,7 +84,8 @@ def main():
     base_path = args.base_path
     verbose = args.verbose
 
-    filename = os.path.join(base_path, f"WCTE_merged_production_R{run}.root")
+
+    filename = os.path.join(base_path, f"WCTE_merged_production_R{run}_bkg.root")    #_singal.root or '_bkg.root'
     if verbose:
         print(f"Opening file: {filename}")
 
@@ -218,7 +219,7 @@ def main():
         print(f"Total selected windows in chunk: {len(df)}")
 
     os.makedirs(outdir, exist_ok=True)
-    out_file = os.path.join(outdir, f"Li9_clusters_range({nHits_min}-{nHits_max})_chunk_{chunk_id}.csv")
+    out_file = os.path.join(outdir, f"Li9_clusters_range({nHits_min}-{nHits_max})_chunk_{chunk_id}_bkg.csv")
     df.to_csv(out_file, index=False)
 
     if verbose:
