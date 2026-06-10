@@ -6,11 +6,11 @@ import re
 import uproot
 
 def main():
-    # Rutas base de tus archivos ya filtrados
+    # Rutas de archivos ya filtrados
     base_dir = "/scratch/elena/9Li/filtered_root"
     chunk_size = 25000
     
-    # Buscamos todos los archivos de señal (cambia a '_bkg.root' cuando analices el fondo)
+    #Search all signal files (or '_bkg.root' for background analysis)
     search_path = os.path.join(base_dir, "*", "*_bkg.root")
     files = sorted(glob.glob(search_path))
     
@@ -28,7 +28,7 @@ def main():
     print("-" * 60)
 
     for f_path in files:
-        # Extraer el número de run del nombre del archivo
+        #run_number
         match = re.search(r'R(\d+)_bkg\.root', os.path.basename(f_path))
         if not match:
             continue
@@ -55,7 +55,7 @@ def main():
             print(f"Error leyendo {os.path.basename(f_path)}: {e}")
 
     print("\n" + "="*60)
-    print("📋 COPIA Y PEGA ESTOS BLOQUES EN TU SCRIPT DE BASH (.sh)")
+    print("COPIAR Y PEGAR EN BASH (.sh)")
     print("="*60 + "\n")
     
     print(f"#SBATCH --array=0-{total_global_chunks - 1}%50\n")

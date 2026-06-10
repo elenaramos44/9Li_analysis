@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4G
 #SBATCH --time=1:00:00
-#SBATCH --array=0-11     # 12 archivos en total (del índice 0 al 11)
+#SBATCH --array=0-11     #12 runs
 
 echo "Setting environment for WCTE isotope calculation"
 
@@ -27,10 +27,10 @@ SCRIPT_PATH="/scratch/elena/9Li/scripts/process_run.py"
 mkdir -p $OUT_DIR
 mkdir -p /scratch/elena/9Li/results/log
 
-# Sumamos 1 al ID de Slurm porque las líneas de un fichero de texto se indexan desde 1, no desde 0
+
 LINE_NUMBER=$((SLURM_ARRAY_TASK_ID + 1))
 
-# Extraemos la ruta exacta de la línea correspondiente
+
 FILE_TO_PROCESS=$(sed -n "${LINE_NUMBER}p" "$LIST_FILE")
 
 echo "------------------------------------------------"
@@ -40,7 +40,7 @@ echo "Processing File: ${FILE_TO_PROCESS}"
 echo "Output Directory: ${OUT_DIR}"
 echo "------------------------------------------------"
 
-# Ejecutamos el script de Python con el archivo inequívoco
+
 python3 $SCRIPT_PATH \
     --input "$FILE_TO_PROCESS" \
     --outdir "$OUT_DIR"

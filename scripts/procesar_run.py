@@ -52,7 +52,7 @@ run_number = match.group(1) if match else "Unknown"
 print(f">>> Iniciando Run {run_number} | Beam p: {beam_momentum} MeV/c...")
 
 # ==============================================================================
-# CARGA DE DATOS EFICIENTE CON UPROOT
+# LOAD BRANCHES 
 # ==============================================================================
 window_branches = [
     "window_data_quality_mask",
@@ -80,7 +80,7 @@ with uproot.open(filename) as file:
     arrays_scalars = tree_scalars.arrays(scalar_branches, library="ak")
 
 # ==============================================================================
-# FILTRADO Y SELECCIÓN DE PIONES
+# FILTERING and PION SELECTION
 # ==============================================================================
 good_mask = (
     (arrays_windows["window_data_quality_mask"] == 0)
@@ -147,7 +147,7 @@ df_pion_events = df_pion_events.drop(columns=["t_start_spill_us"])
 dt = df_pion_events["t_end_spill [ms]"] - df_pion_events["t_pi [ms]"]
 
 # ==============================================================================
-# CÁLCULO DE PROBABILIDADES
+# PROBABILITIES
 # ==============================================================================
 df_pion_events["p_12B_early"] = np.exp(-dt / TAU_12B) * (
     np.exp(-t_start_win / TAU_12B) - np.exp(-t_threshold / TAU_12B)

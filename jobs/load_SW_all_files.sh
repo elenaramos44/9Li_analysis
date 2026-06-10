@@ -12,7 +12,6 @@
 #SBATCH --array=0-564%50          #maximum of 50 running at once (ALL: 845%50)
 
 
-#environment setup
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
 
@@ -80,7 +79,7 @@ fi
 OUTDIR=/scratch/elena/9Li/results/run${TARGET_RUN}
 mkdir -p $OUTDIR
 
-#execution block
+#execution
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task=${TASK_ID} -> Processing Run=${TARGET_RUN} Chunk=${TARGET_CHUNK} Path=${TARGET_PATH}"
 
 python3 $SCRIPT \

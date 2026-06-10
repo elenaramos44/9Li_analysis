@@ -13,7 +13,7 @@ def calculate_chunks(file_path, chunk_size):
             tree = file["WCTEReadoutWindows"]
             total_events = tree.num_entries
             
-            # Calculate chunks (rounding up)
+            #calculate chunks (rounding up)
             num_chunks = math.ceil(total_events / chunk_size)
             max_array_index = num_chunks - 1
 

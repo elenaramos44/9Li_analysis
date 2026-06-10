@@ -8,11 +8,9 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=12G
-#SBATCH --time=0:30:00            # Shortened runtime since we removed plotting overhead
-#SBATCH --array=0-11              # 12 parallel indices mapped to your 12 target runs
+#SBATCH --time=0:30:00            
+#SBATCH --array=0-11              #12 runs
 
-
-# Environment Setup
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
 
@@ -26,7 +24,7 @@ echo "WCSim environment setup ready"
 SCRIPT=/scratch/elena/9Li/scripts/merge_and_fv_cut.py
 INDEX=${SLURM_ARRAY_TASK_ID}
 
-# Mapping absolute array index to specific target runs
+
 RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
 TARGET_RUN=${RUNS[$INDEX]}
 
@@ -37,7 +35,6 @@ fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Merge and FV Cut Selection for Run=${TARGET_RUN}"
 
-# Execute calculation script
 python3 $SCRIPT --run $TARGET_RUN
 
 echo "Process completed successfully for Run=${TARGET_RUN}"

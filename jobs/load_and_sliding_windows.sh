@@ -31,8 +31,7 @@ BASE_PATH=/data/elena/data/p_340
 
 mkdir -p $OUTDIR
 
-# -------------------------------
-# SLURM task info
+
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Running run=${RUN} chunk=${TASK_ID}"
 

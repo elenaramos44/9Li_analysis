@@ -1,6 +1,8 @@
 #!/bin/bash
 #SBATCH --qos=regular
 #SBATCH --job-name=Li9_multilat
+#SBATCH --output=/scratch/elena/9Li/results/log/multilat_task_%A_%a.out
+#SBATCH --error=/scratch/elena/9Li/results/log/multilat_task_%A_%a.err
 #SBATCH --partition=general
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -8,11 +10,6 @@
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
 #SBATCH --array=0-564%50
-
-# Organiza los logs de salida en una carpeta con el ID del Job
-#SBATCH --output=/scratch/elena/9Li/results/log/multilat_task_%A_%a.out
-#SBATCH --error=/scratch/elena/9Li/results/log/multilat_task_%A_%a.err
-
 
 
 echo "Setting environment for multilateration"
@@ -33,14 +30,12 @@ export ROOT_INCLUDE_PATH=$BONSAIDIR/bonsai:/scratch/elena/wcsim-install/include/
 
 echo "Environment ready (multilateration)"
 
-# Global configurations
+
 SCRIPT=/scratch/elena/9Li/scripts/multilat_vertex_reconstruction.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-# ==============================================================================
-# LÓGICA DE MAPEO EXACTA (Idéntica al script anterior)
-# ==============================================================================
 RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
+
 #CHUNKS_PER_RUN=(50 48 79 92 97 66 68 58 79 44 72 93)   #raw data
 #CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33)    #filtered data
 CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16)     #bkg
@@ -62,7 +57,7 @@ for i in "${!RUNS[@]}"; do
     CURRENT_SUM=$NEXT_SUM
 done
 
-# Control de seguridad de límites
+
 if [ -z "$TARGET_RUN" ]; then
     echo "Error: TASK_ID $TASK_ID fuera de los límites calculados."
     exit 1
@@ -73,7 +68,7 @@ IN_DIR=/scratch/elena/9Li/results/run${TARGET_RUN}
 OUT_DIR=/scratch/elena/9Li/results/run${TARGET_RUN}/multilat_output
 CSV_FILE="${IN_DIR}/Li9_clusters_range(15-50)_chunk_${TARGET_CHUNK}_bkg.csv"
 
-# Crea la carpeta de salida si no existe (ej. /results/run1937/multilat_output/)
+#mkdir carpeta de salida si no existe
 mkdir -p $OUT_DIR
 
 echo "--------------------------------------------------------"
@@ -84,7 +79,7 @@ echo "Input CSV: $CSV_FILE"
 echo "Output Dir: $OUT_DIR"
 echo "--------------------------------------------------------"
 
-# Ejecución del script de Python
+#execution
 python3 $SCRIPT \
     --csv $CSV_FILE \
     --outdir $OUT_DIR \

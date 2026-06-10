@@ -9,11 +9,11 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=1:30:00
-#SBATCH --array=0-11%4           # Max 4 runs processing at the same time
+#SBATCH --array=0-11%4           #4 runs processing at the same time
 
 mkdir -p /scratch/elena/9Li/filtered_root/log/%A
 
-# Environment setup (Matching your workspace exactly)
+
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
 
@@ -24,12 +24,13 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scratch/elena/wcsim-install/lib
 
 echo "WCSim environment setup ready for skimming"
 
-# Define parameters and script path
+
 SCRIPT=/scratch/elena/9Li/scripts/filter_pion_spills.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-# Simple run array matching index-to-index
+
 RUNS=(1846 1848 1928 1930 1932 1934 1935 1936 1937 1938 1939 1941)
+
 TARGET_RUN=${RUNS[$TASK_ID]}
 
 if [ -z "$TARGET_RUN" ]; then
@@ -39,7 +40,7 @@ fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Skimming Task=${TASK_ID} -> Processing Run=${TARGET_RUN}"
 
-# Execution block
+#Execution block
 python3 $SCRIPT \
     --run $TARGET_RUN \
     --in-base /data/elena/data \
