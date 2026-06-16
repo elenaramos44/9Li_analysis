@@ -6,9 +6,7 @@ import argparse
 import pandas as pd
 import numpy as np
 
-# ----------------------------------------------------------------------
-# ENVIRONMENT AND PATH SETUP
-# ----------------------------------------------------------------------
+#setup
 ROOT_PATH = "/scratch/elena/root-6.26.04-install"
 os.environ["ROOTSYS"] = ROOT_PATH
 os.environ["PYTHONPATH"] = f"{ROOT_PATH}/lib:{os.environ.get('PYTHONPATH', '')}"
@@ -22,15 +20,13 @@ sys.path.append("/scratch/elena/9Li/scripts")
 import functions_bonsai
 import functions_multilateration
 
-# Constant speed of light in the medium (cm/ns)
-C_N = 29.9792458 / 1.33  
 
-# ----------------------------------------------------------------------
-# REFINEMENT PIPELINE FUNCTION
-# ----------------------------------------------------------------------
+c_n = 29.9792458 / 1.33  
+
+#refinememt function
 def refine_cluster(row, lookup_table):
     """Refines a single cluster vertex using multilateration after filtering hits."""
-    # Force module namespace initialization
+    # Force module namespace initialization (error without this)
     functions_bonsai.geo = lookup_table
     
     times = np.array(row['hit_times_ns'])
@@ -39,25 +35,24 @@ def refine_cluster(row, lookup_table):
     v_init = np.array([row['vertex_x'], row['vertex_y'], row['vertex_z']])
     
     try:
-        # Get physical PMT coordinates
         x_p, y_p, z_p, _ = functions_bonsai.getxyz(lookup_table, mpmt_ids, pmt_ids)
         pmt_pos = np.column_stack([x_p, y_p, z_p])
         
-        # Calculate residual times (dt)
-        tof = np.linalg.norm(pmt_pos - v_init, axis=1) / C_N
+        #dt (residual time)
+        tof = np.linalg.norm(pmt_pos - v_init, axis=1) / c_n   #calcula la distancia lineal en 3D
         t_corr = times - tof
         t0_guess = np.median(t_corr)
         dt = t_corr - t0_guess
         
-        # Filter residual times (dt < 3.0 ns)
+        # filter dt < 3ns
         clean_mask = (np.abs(dt) < 3.0)
         nhits_fine = np.sum(clean_mask)
         
-        # CRITICAL FILTER: Drop cluster completely if remaining hits < 15
+        #drop cluster completely if remaining hits <15
         if nhits_fine < 15:
             return pd.Series([np.nan]*5, index=['v_x_fine', 'v_y_fine', 'v_z_fine', 't_rms_fine', 'nhits_fine'])
 
-        # Multilateration fit (Fine adjustment)
+        # Multilateration fit 
         vertex = functions_multilateration.run_multilateration_candidate(
             times[clean_mask], mpmt_ids[clean_mask], pmt_ids[clean_mask],
             sigma_t=2.2,
@@ -65,7 +60,7 @@ def refine_cluster(row, lookup_table):
         )
         
         if vertex["success"]:
-            t_rms_final = np.std(vertex["pulls"] * 2.2)
+            t_rms_final = np.std(vertex["pulls"] * 2.2)   #2.2 es el error temporal de los PMTs (sigma_t)
             return pd.Series([vertex['x'], vertex['y'], vertex['z'], t_rms_final, nhits_fine], 
                              index=['v_x_fine', 'v_y_fine', 'v_z_fine', 't_rms_fine', 'nhits_fine'])
     except Exception:
@@ -74,13 +69,11 @@ def refine_cluster(row, lookup_table):
     return pd.Series([np.nan]*5, index=['v_x_fine', 'v_y_fine', 'v_z_fine', 't_rms_fine', 'nhits_fine'])
 
 
-# ----------------------------------------------------------------------
-# MAIN EXECUTION
-# ----------------------------------------------------------------------
+
 def main():
-    parser = argparse.ArgumentParser(description="Parallel Refinement Processing for 9Li Data Chunks")
-    parser.add_argument("--run", type=int, required=True, help="Run number to process")
-    parser.add_argument("--chunk-id", type=int, required=True, help="Specific chunk ID to process")
+    parser = argparse.ArgumentParser(description="Refinement for 9Li data")
+    parser.add_argument("--run", type=int, required=True, help="run_number")
+    parser.add_argument("--chunk-id", type=int, required=True, help="chunk_id")
     args = parser.parse_args()
 
     processed_folder = f"/scratch/elena/9Li/results/run{args.run}/processed"
@@ -97,7 +90,7 @@ def main():
     output_filename = f"Refine_Li9_clusters_chunk_{args.chunk_id}_BKG.pkl"
     output_filepath = os.path.join(processed_folder, output_filename)
     
-    print(f"Loading Geometry Mapping...")
+    print(f"Loading geometry")
     geo_data = functions_bonsai.get_geo_mapping()
     lookup_table = functions_bonsai.build_lookup_table(geo_data)
     functions_bonsai.geo = lookup_table
