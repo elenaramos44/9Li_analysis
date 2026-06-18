@@ -24,7 +24,6 @@ echo "WCSim environment setup ready"
 SCRIPT=/scratch/elena/9Li/scripts/merge_and_fv_cut.py
 INDEX=${SLURM_ARRAY_TASK_ID}
 
-
 RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
 TARGET_RUN=${RUNS[$INDEX]}
 
@@ -35,6 +34,7 @@ fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Merge and FV Cut Selection for Run=${TARGET_RUN}"
 
-python3 $SCRIPT --run $TARGET_RUN
+# --- MODIFICACIÓN: Añadimos $EXTRA_ARGS para propagar la flag --bkg si existiera ---
+python3 $SCRIPT --run $TARGET_RUN $EXTRA_ARGS
 
 echo "Process completed successfully for Run=${TARGET_RUN}"

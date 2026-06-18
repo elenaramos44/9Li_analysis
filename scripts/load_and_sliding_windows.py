@@ -13,14 +13,12 @@ def parse_args():
     parser.add_argument("--chunk-size", type=int, default=25000)
     parser.add_argument("--outdir", type=str, required=True)
     parser.add_argument("--base-path", type=str, required=True)
+    # --- MODIFICACIÓN: Añadida bandera booleana para discriminar la muestra ---
+    parser.add_argument("--bkg", action="store_true", help="Process background root file instead of signal")
     parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
 
 def default_time_rms_fun(times_in_win, t_start, window):
-    """
-    Función auxiliar por defecto para calcular el RMS del tiempo 
-    respecto a la media de los tiempos dentro de la ventana.
-    """
     if len(times_in_win) == 0:
         return 0.0, 0.0
     mean_t = np.mean(times_in_win)
@@ -34,12 +32,8 @@ def nHitstRMSTimeWindow(
     death_window,
     time_rms_fun=default_time_rms_fun,
     rms_cut_ns=10.0,
-    threshold_sup=np.inf,     # reject if count >= threshold_sup
+    threshold_sup=np.inf,
 ):
-    """
-    Sliding window finder optimizado que implementa cortes por RMS de tiempo y umbral superior.
-    Usa np.searchsorted para mantener la eficiencia del script original de saltos rápidos.
-    """
     times = np.sort(np.asarray(times_branch_event_arg, float))
     n = len(times)
 
@@ -50,23 +44,19 @@ def nHitstRMSTimeWindow(
     i = 0
     while i < n:
         t_start = times[i]
-        # Optimización usando searchsorted igual que en tu función anterior
         idx_end = np.searchsorted(times, t_start + window, side='right')
         count = idx_end - i
 
         if count >= threshold_inf:
-            # Extraemos los tiempos correspondientes a la ventana actual
             times_in_win = times[i:idx_end]
             t_rms, _ = time_rms_fun(times_in_win, t_start, window)
             t_rms = float(t_rms)
 
-            # Se aplican los cortes de rechazo reglamentarios
             if (t_rms <= rms_cut_ns) and (count < threshold_sup):
                 cand_times.append(float(t_start))
                 cand_nhits.append(count)
                 cand_trms.append(t_rms)
 
-            # Lockout region utilizando searchsorted para saltar de forma eficiente
             t_skip_until = t_start + window + death_window
             i = np.searchsorted(times, t_skip_until, side='right')
         else:
@@ -84,8 +74,17 @@ def main():
     base_path = args.base_path
     verbose = args.verbose
 
+    # --- MODIFICACIÓN: Selección dinámica del archivo ROOT de entrada y de la etiqueta de salida ---
+    if args.bkg:
+        filename = os.path.join(base_path, f"WCTE_merged_production_R{run}_bkg.root")
+        output_filename = f"Li9_clusters_chunk_{chunk_id}_BKG.pkl"
+        sample_label = "BACKGROUND"
+    else:
+        filename = os.path.join(base_path, f"WCTE_merged_production_R{run}_signal.root")
+        output_filename = f"Li9_clusters_chunk_{chunk_id}.pkl"
+        sample_label = "SIGNAL"
 
-    filename = os.path.join(base_path, f"WCTE_merged_production_R{run}_bkg.root")    #_singal.root or '_bkg.root'
+    print(f"Processing {sample_label} for Run {run}, Chunk {chunk_id}")
     if verbose:
         print(f"Opening file: {filename}")
 
@@ -101,7 +100,6 @@ def main():
         "hit_pmt_charges"
     ]
     
-    # parallelization --> chunks
     start_entry = chunk_id * chunk_size
     stop_entry = start_entry + chunk_size
 
@@ -110,10 +108,16 @@ def main():
     if verbose:
         print(f"Loaded {len(arrays.window_time)} readout windows")
 
+    if len(arrays.window_time) == 0:
+        print("No windows found in this chunk. Generating empty output structure.")
+        df_empty = pd.DataFrame()
+        os.makedirs(outdir, exist_ok=True)
+        df_empty.to_pickle(os.path.join(outdir, output_filename))
+        return
+
     window_times_ns = ak.to_numpy(arrays.window_time)
     spill_ids = ak.to_numpy(arrays.spill_counter)
 
-    # flatten hits for relative times within each window
     hit_times_ns = ak.to_numpy(ak.flatten(arrays.hit_pmt_calibrated_times))
     slot_ids = ak.to_numpy(ak.flatten(arrays.hit_mpmt_slot_ids))
     position_ids = ak.to_numpy(ak.flatten(arrays.hit_pmt_position_ids))
@@ -134,7 +138,6 @@ def main():
     if verbose:
         print(f"Total hits in chunk: {len(abs_hit_times_ns)}")
     
-    # sliding window parameters
     window_ns = 20
     nHits_min = 15
     nHits_max = 50
@@ -142,20 +145,17 @@ def main():
     rms_cut_ns = 10.0
 
     rows = []
-    spill_stats = [] # To store cluster counts per spill
+    spill_stats = []
 
-    # Loop per spill
     for spill in np.unique(hit_spill_ids):
-
         mask_spill = hit_spill_ids == spill
         times_spill = abs_hit_times_ns[mask_spill]
 
         if len(times_spill) == 0:
             continue
 
-        # define Li9 window
         t_end = np.max(times_spill)
-        t_start = t_end - 0.48e9  # 0.48 s in ns
+        t_start = t_end - 0.48e9  
 
         mask_Li9 = (times_spill >= t_start) & (times_spill <= t_end)
         times_Li9 = times_spill[mask_Li9]
@@ -163,7 +163,6 @@ def main():
         if len(times_Li9) == 0:
             continue
 
-        # sliding window on THIS SPILL only con la nueva función integrada
         t_window_start, nHits_list, t_rms_list = nHitstRMSTimeWindow(
             times_Li9,
             threshold_inf=nHits_min,
@@ -174,11 +173,8 @@ def main():
             time_rms_fun=default_time_rms_fun
         )
 
-        # La nueva función ya filtra por threshold_sup y rms_cut_ns internamente.
-        # Todos los índices devueltos son válidos.
-        num_clusters_in_spill = len(t_window_start)    # activity metric
+        num_clusters_in_spill = len(t_window_start)    
         
-        # Save spill activity info
         spill_stats.append({
             "run": run,
             "spill_id": spill,
@@ -192,7 +188,6 @@ def main():
         if verbose:
             print(f"Spill {spill}: {len(t_window_start)} candidates")
 
-        # save results
         for idx in range(num_clusters_in_spill):
             t0 = t_window_start[idx]
             nhits = nHits_list[idx]
@@ -200,10 +195,10 @@ def main():
             mask_cluster = (times_Li9 >= t0) & (times_Li9 < t0 + window_ns)
             
             rows.append({
-                "t_window_start_ns": t0,                   # abs time of the run
-                "t_window_start_rel_ns": t0 - t_start,     # rel time within the sw
+                "t_window_start_ns": t0,                   
+                "t_window_start_rel_ns": t0 - t_start,     
                 "nHits": nhits,
-                "t_rms_ns": trms,                          # añadida métrica calculada al output
+                "t_rms_ns": trms,                          
                 "spill_id": spill,
                 "nCLusters_in_spill": num_clusters_in_spill,
 
@@ -218,9 +213,10 @@ def main():
     if verbose:
         print(f"Total selected windows in chunk: {len(df)}")
 
+    # --- MODIFICACIÓN: Se guarda como archivo .pkl usando to_pickle ---
     os.makedirs(outdir, exist_ok=True)
-    out_file = os.path.join(outdir, f"Li9_clusters_range({nHits_min}-{nHits_max})_chunk_{chunk_id}_bkg.csv")
-    df.to_csv(out_file, index=False)
+    out_file = os.path.join(outdir, output_filename)
+    df.to_pickle(out_file)
 
     if verbose:
         print(f"Saved: {out_file}")

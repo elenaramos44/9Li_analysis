@@ -1,0 +1,12 @@
+/data/elena/data/p_340/WCTE_merged_production_R1846.root
+/data/elena/data/p_340/WCTE_merged_production_R1848.root
+/data/elena/data/p_260/WCTE_merged_production_R1928.root
+/data/elena/data/p_260/WCTE_merged_production_R1930.root
+/data/elena/data/p_260/WCTE_merged_production_R1932.root
+/data/elena/data/p_260/WCTE_merged_production_R1934.root
+/data/elena/data/p_260/WCTE_merged_production_R1935.root
+/data/elena/data/p_260/WCTE_merged_production_R1936.root
+/data/elena/data/p_260/WCTE_merged_production_R1937.root
+/data/elena/data/p_260/WCTE_merged_production_R1938.root
+/data/elena/data/p_260/WCTE_merged_production_R1939.root
+/data/elena/data/p_260/WCTE_merged_production_R1941.root

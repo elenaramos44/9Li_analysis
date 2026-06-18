@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
-#SBATCH --array=0-564%50
+
 
 
 echo "Setting environment for multilateration"
@@ -36,10 +36,16 @@ TASK_ID=${SLURM_ARRAY_TASK_ID}
 
 RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
 
-#CHUNKS_PER_RUN=(50 48 79 92 97 66 68 58 79 44 72 93)   #raw data
-#CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33)    #filtered data
-CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16)     #bkg
-
+# ==============================================================================
+# SELECCIÓN DINÁMICA DE CHUNKS SEGÚN EXTRA_ARGS
+# ==============================================================================
+if [[ "$EXTRA_ARGS" == "--bkg" ]]; then
+    echo ">> MULTILATERATION: BACKGROUND MODE DETECTED <<"
+    CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16)
+else
+    echo ">> MULTILATERATION: SIGNAL MODE DETECTED <<"
+    CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33)
+fi
 
 CURRENT_SUM=0
 TARGET_RUN=""
@@ -57,32 +63,36 @@ for i in "${!RUNS[@]}"; do
     CURRENT_SUM=$NEXT_SUM
 done
 
-
 if [ -z "$TARGET_RUN" ]; then
-    echo "Error: TASK_ID $TASK_ID fuera de los límites calculados."
-    exit 1
+    echo "Task ID ${TASK_ID} exceeds required chunks. Exiting cleanly."
+    exit 0
 fi
 
+IN_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
+OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed" # Guardamos todo en processed para simplificar rutas
 
-IN_DIR=/scratch/elena/9Li/results/run${TARGET_RUN}
-OUT_DIR=/scratch/elena/9Li/results/run${TARGET_RUN}/multilat_output
-CSV_FILE="${IN_DIR}/Li9_clusters_range(15-50)_chunk_${TARGET_CHUNK}_bkg.csv"
+# Definimos el nombre del archivo de entrada según la muestra procesada
+if [[ "$EXTRA_ARGS" == "--bkg" ]]; then
+    INPUT_FILE="${IN_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}_BKG.pkl"
+else
+    INPUT_FILE="${IN_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}.pkl"
+fi
 
-#mkdir carpeta de salida si no existe
 mkdir -p $OUT_DIR
 
 echo "--------------------------------------------------------"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task: $TASK_ID"
 echo "Processing Run: $TARGET_RUN"
 echo "Processing Chunk: $TARGET_CHUNK"
-echo "Input CSV: $CSV_FILE"
+echo "Input PKL: $INPUT_FILE"
 echo "Output Dir: $OUT_DIR"
 echo "--------------------------------------------------------"
 
-#execution
+# Añadimos $EXTRA_ARGS al script de Python
 python3 $SCRIPT \
-    --csv $CSV_FILE \
+    --pkl $INPUT_FILE \
     --outdir $OUT_DIR \
+    $EXTRA_ARGS \
     --verbose
 
 echo "Finished chunk ${TARGET_CHUNK} for run ${TARGET_RUN}"

@@ -15,9 +15,7 @@ echo "Setting environment for PKL conversion"
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
 
-
-RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848 )
-
+RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
 TARGET_RUN=${RUNS[${SLURM_ARRAY_TASK_ID}]}
 
 SCRIPT=/scratch/elena/9Li/scripts/procesado_csv_multilat.py
@@ -28,9 +26,10 @@ echo "Global Task: ${SLURM_ARRAY_TASK_ID} -> Processing Entire Run: $TARGET_RUN"
 echo "Output Directory: $OUT_DIR"
 echo "--------------------------------------------------------"
 
-
+# Añadimos $EXTRA_ARGS al script de Python
 python3 $SCRIPT \
     --run $TARGET_RUN \
-    --outdir $OUT_DIR
+    --outdir $OUT_DIR \
+    $EXTRA_ARGS
 
 echo "Finished conversion completely for run ${TARGET_RUN}"

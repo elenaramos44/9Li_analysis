@@ -6,7 +6,7 @@ import uproot
 import awkward as ak
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Skim WCTE ROOT files into Signal and Background using Uproot with branch selection.")
+    parser = argparse.ArgumentParser(description="Skim WCTE ROOT files into SIGNAL and BKG using uproot with branch selection.")
     parser.add_argument("--run", type=int, required=True, help="Run number")
     parser.add_argument("--in-base", type=str, required=True, help="Base path for input data")
     parser.add_argument("--out-base", type=str, required=True, help="Base path for output processed files")
@@ -28,7 +28,7 @@ def main():
         print(f"Error: Input file {input_file} does not exist.")
         return
 
-    # Definimos EXCLUSIVAMENTE las ramas que tu pipeline va a usar en los pasos 1 a 5
+
     branches_to_keep = [
         "window_time",
         "spill_counter",
@@ -50,7 +50,7 @@ def main():
         "vme_act_tagger"
     ]
 
-    # 1. Cargar solo las ramas necesarias
+    #lonly these TTres 
     with uproot.open(input_file) as f_in:
         tree_windows = f_in["WCTEReadoutWindows"]
         tree_scalars = f_in["vme_analysis_scalar_results"]
@@ -60,7 +60,7 @@ def main():
 
     print(f"Loaded {len(arrays_win)} readout windows with essential branches.")
 
-    # 2. Aplicar los cortes de calidad exactos de tu Jupyter Notebook
+    #Quality Cuts and T5
     mask_quality = (
         (arrays_win["window_data_quality_mask"] == 0) &
         (arrays_win["vme_evt_quality_bitmask"] == 0) &
@@ -75,7 +75,7 @@ def main():
     tagger_cut = arrays_sc["act_tagger_cut"][0]
     mask_pion_event = (arrays_win["vme_act_tagger"] < tagger_cut) & mask_quality
 
-    # 3. Extrapolar a nivel de SPILL completo
+    # Extrapolar a nivel de SPILL completo
     pion_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][mask_pion_event]))
     all_spills_vec = ak.to_numpy(arrays_win["spill_counter"])
     
@@ -85,16 +85,16 @@ def main():
     print(f"Found {len(pion_spills)} unique spills containing pions.")
     print(f"Signal windows: {np.sum(signal_window_mask)} | Background windows: {np.sum(bkg_window_mask)}")
 
-    # 4. Crear los esquemas de tipos optimizados basándonos solo en las ramas deseadas
+    # Crear los esquemas de tipos optimizados
     tree_schema = {field: arrays_win[field].type for field in branches_to_keep}
     scalar_schema = {field: arrays_sc[field].type for field in tree_scalars.keys()}
 
-    # Tamaño del bloque para no saturar los TBaskets de ROOT (100k ventanas por cesto)
+    # Tamaño del bloque para no saturar los TBaskets de ROOT (100k window per chunk)
     chunk_step = 100000
 
-    # --- GUARDAR MUESTRA DE SEÑAL ---
+    #SIGNAL_SAMPLE
+
     print(f"Writing Signal output in chunks: {out_signal_path}")
-    # Extraemos solo los eventos de señal para trocearlos limpiamente
     signal_arrays = arrays_win[signal_window_mask]
     num_signal = len(signal_arrays)
 
@@ -102,16 +102,16 @@ def main():
         f_sig.mktree("WCTEReadoutWindows", tree_schema)
         f_sig.mktree("vme_analysis_scalar_results", scalar_schema)
         
-        # Escribimos el árbol de escalares (que es diminuto)
         f_sig["vme_analysis_scalar_results"].extend({field: arrays_sc[field] for field in tree_scalars.keys()})
         
-        # Escribimos el árbol principal en trozos pequeños seguros para los TBaskets
+        # Escribimos el árbol principal en trozos pequeños seguros para los TBaskets (?)
         for i in range(0, num_signal, chunk_step):
             chunk = signal_arrays[i : i + chunk_step]
             f_sig["WCTEReadoutWindows"].extend({field: chunk[field] for field in branches_to_keep})
             print(f"  -> Written signal entries {i} to {min(i + chunk_step, num_signal)}")
 
-    # --- GUARDAR MUESTRA DE FONDO ---
+    #BACKGROUND_SAMPLE
+
     print(f"Writing Background output in chunks: {out_bkg_path}")
     bkg_arrays = arrays_win[bkg_window_mask]
     num_bkg = len(bkg_arrays)
@@ -127,7 +127,7 @@ def main():
             f_bkg["WCTEReadoutWindows"].extend({field: chunk[field] for field in branches_to_keep})
             print(f"  -> Written background entries {i} to {min(i + chunk_step, num_bkg)}")
 
-    print("🎉 Skimming and file segregation completed successfully!")
+    print("Sample separation completed successfully!")
     
 if __name__ == "__main__":
     main()

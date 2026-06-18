@@ -12,8 +12,11 @@ import functions_multilateration
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Multilateration vertex reconstruction with Chi2 and Quality Metrics")
-    parser.add_argument("--csv", type=str, required=True, help="Input CSV with clusters")
+    # --- MODIFICACIÓN: Cambiado de --csv a --pkl ---
+    parser.add_argument("--pkl", type=str, required=True, help="Input PKL with clusters")
     parser.add_argument("--outdir", type=str, required=True, help="Output folder")
+    # --- MODIFICACIÓN: Añadida bandera booleana para discriminar la muestra ---
+    parser.add_argument("--bkg", action="store_true", help="Process background data instead of signal")
     parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
 
@@ -23,13 +26,12 @@ def run_multilat_full_info(row, verbose=False):
     """
     times = np.array(row['hit_times_ns'])
     mpmt_ids = np.array(row['hit_slot_ids'])
-    pmt_ids  = np.array(row['hit_position_ids'])   #in the merged_prodution there's no hit_mpmt_card_ids, either hit_pmt_channel_id
+    pmt_ids  = np.array(row['hit_position_ids'])
 
     valid_mask = (mpmt_ids >= 0) & (pmt_ids >= 0) & np.isfinite(times)
     times = times[valid_mask]
     mpmt_ids = mpmt_ids[valid_mask]
     pmt_ids = pmt_ids[valid_mask]
-
 
     res_data = {
         "vertex_x": np.nan,
@@ -86,10 +88,19 @@ def main():
     geo_df = functions_bonsai.get_geo_mapping()
     functions_bonsai.geo = functions_bonsai.build_lookup_table(geo_df)
 
-    # Load cluster data
-    df = pd.read_csv(args.csv, converters={
-        'hit_times_ns': eval, 'hit_slot_ids': eval, 'hit_position_ids': eval
-    })
+    # --- MODIFICACIÓN: Carga directa vía pickle (sin eval) ---
+    if args.verbose:
+        print(f"Loading pickle file: {args.pkl}")
+    df = pd.read_pickle(args.pkl)
+
+    # Si el chunk original vino vacío, creamos la estructura de salida vacía directamente
+    if df.empty:
+        print("Input dataframe is empty. Writing empty file to disk.")
+        for col in ["vertex_x", "vertex_y", "vertex_z", "fit_success", "n_hits_used", "time_rms", "chi2", "ndof", "chi2_ndof"]:
+            df[col] = None
+        out_name = os.path.basename(args.pkl).replace(".pkl", "_multilat.pkl")
+        df.to_pickle(os.path.join(args.outdir, out_name))
+        return
 
     if args.verbose:
         print(f"Loaded {len(df)} clusters. Starting reconstruction...")
@@ -100,18 +111,17 @@ def main():
             print(f"Processing cluster {i}/{len(df)}...")
 
         v_info = run_multilat_full_info(row, verbose=args.verbose)
-        
-        # Unimos la info original con los nuevos campos de chi2
         combined_row = {**row, **v_info}
         results.append(combined_row)
 
     df_final = pd.DataFrame(results)
     
+    # --- MODIFICACIÓN: Gestión del nombre de salida dinámica y guardado en .pkl ---
     os.makedirs(args.outdir, exist_ok=True)
-    out_name = os.path.basename(args.csv).replace("_bkg.csv", "_multilat_chi2.csv")
+    out_name = os.path.basename(args.pkl).replace(".pkl", "_multilat.pkl")
     out_path = os.path.join(args.outdir, out_name)
     
-    df_final.to_csv(out_path, index=False)
+    df_final.to_pickle(out_path)
     
     if args.verbose:
         print(f"Finished! Results with Chi2 saved to: {out_path}")

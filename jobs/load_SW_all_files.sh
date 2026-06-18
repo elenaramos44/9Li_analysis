@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
-#SBATCH --array=0-564%50          #maximum of 50 running at once (ALL: 845%50)
+
 
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
@@ -22,12 +22,9 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scratch/elena/wcsim-install/lib
 
 echo "WCSim environment setup ready"
 
-
 CHUNK_SIZE=25000
 SCRIPT=/scratch/elena/9Li/scripts/load_and_sliding_windows.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
-
-#from get_chunks.py
 
 RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
 
@@ -46,11 +43,16 @@ PATHS=(
     "/scratch/elena/9Li/filtered_root/p_340"
 )
 
-#CHUNKS_PER_RUN=(50 48 79 92 97 66 68 58 79 44 72 93)    #raw runs
-
-#CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33)     #filtered runs
-CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16)     #bkg
-
+# ==============================================================================
+# SELECCIÓN DINÁMICA DEL NÚMERO DE CHUNKS SEGÚN EXTRA_ARGS
+# ==============================================================================
+if [[ "$EXTRA_ARGS" == "--bkg" ]]; then
+    echo ">> SLIDING WINDOWS: BACKGROUND MODE DETECTED <<"
+    CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16) # BKG Chunks (Total ~565)
+else
+    echo ">> SLIDING WINDOWS: SIGNAL MODE DETECTED <<"
+    CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33) # Signal Chunks (Total ~290)
+fi
 
 CURRENT_SUM=0
 TARGET_RUN=""
@@ -70,24 +72,25 @@ for i in "${!RUNS[@]}"; do
     CURRENT_SUM=$NEXT_SUM
 done
 
-
+# Control de seguridad si el TASK_ID de Slurm supera el total de chunks de la muestra actual
 if [ -z "$TARGET_RUN" ]; then
-    echo "Error: TASK_ID $TASK_ID out of bounds."
-    exit 1
+    echo "Task ID ${TASK_ID} exceeds the total required chunks for this sample. Exiting cleanly."
+    exit 0
 fi
 
-OUTDIR=/scratch/elena/9Li/results/run${TARGET_RUN}
+OUTDIR=/scratch/elena/9Li/results/run${TARGET_RUN}/processed
 mkdir -p $OUTDIR
 
-#execution
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task=${TASK_ID} -> Processing Run=${TARGET_RUN} Chunk=${TARGET_CHUNK} Path=${TARGET_PATH}"
 
+# Añadimos $EXTRA_ARGS al final de la ejecución de Python
 python3 $SCRIPT \
     --run $TARGET_RUN \
     --chunk-id $TARGET_CHUNK \
     --chunk-size $CHUNK_SIZE \
     --outdir $OUTDIR \
     --base-path $TARGET_PATH \
+    $EXTRA_ARGS \
     --verbose
 
 echo "Task finished successfully: run=${TARGET_RUN} chunk=${TARGET_CHUNK}"

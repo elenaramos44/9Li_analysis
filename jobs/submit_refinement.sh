@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=4         
 #SBATCH --mem=8G                 
 #SBATCH --time=2:00:00           
-#SBATCH --array=0-564%50         # TOTAL: 846 chunks across all runs
+       
 
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
@@ -25,17 +25,22 @@ echo "WCSim environment setup ready"
 SCRIPT=/scratch/elena/9Li/scripts/refinement_all.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-
 RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
 
-#CHUNKS_PER_RUN=(50 48 79 92 97 66 68 58 79 44 72 93)  #raw
-#CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33)     #filtered runs
-CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16)     #bkg
+# ==============================================================================
+# SELECCIÓN DINÁMICA DE CHUNKS SEGÚN EXTRA_ARGS
+# ==============================================================================
+if [[ "$EXTRA_ARGS" == "--bkg" ]]; then
+    echo ">> REFINEMENT: BACKGROUND MODE DETECTED <<"
+    CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16)
+else
+    echo ">> REFINEMENT: SIGNAL MODE DETECTED <<"
+    CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33)
+fi
 
 CURRENT_SUM=0
 TARGET_RUN=""
 TARGET_CHUNK=""
-
 
 for i in "${!RUNS[@]}"; do
     NUM_CHUNKS=${CHUNKS_PER_RUN[$i]}
@@ -50,15 +55,16 @@ for i in "${!RUNS[@]}"; do
 done
 
 if [ -z "$TARGET_RUN" ]; then
-    echo "Error: TASK_ID $TASK_ID out of boundaries."
-    exit 1
+    echo "Task ID ${TASK_ID} exceeds required chunks. Exiting cleanly."
+    exit 0
 fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task=${TASK_ID} -> Starting Refinement for Run=${TARGET_RUN} Chunk=${TARGET_CHUNK}"
 
-
+# Añadimos $EXTRA_ARGS al final del comando de Python
 python3 $SCRIPT \
     --run $TARGET_RUN \
-    --chunk-id $TARGET_CHUNK
+    --chunk-id $TARGET_CHUNK \
+    $EXTRA_ARGS
 
 echo "Task finished successfully: run=${TARGET_RUN} chunk=${TARGET_CHUNK}"
