@@ -69,7 +69,7 @@ if [ -z "$TARGET_RUN" ]; then
 fi
 
 IN_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
-OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed" # Guardamos todo en processed para simplificar rutas
+OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed" # Guardar todo en processed para simplificar rutas
 
 # Definimos el nombre del archivo de entrada según la muestra procesada
 if [[ "$EXTRA_ARGS" == "--bkg" ]]; then
