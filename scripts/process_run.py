@@ -9,16 +9,16 @@ import pandas as pd
 import uproot
 
 # ==============================================================================
-# CONTROLLER DE ARGUMENTOS DE LÍNEA DE COMANDOS
+# COMMAND LINE ARGUMENTS CONTROLLER
 # ==============================================================================
 parser = argparse.ArgumentParser(
-    description="Procesa un archivo ROOT de WCTE para calcular producción de isótopos a nivel de Run."
+    description="Processes a WCTE ROOT file to calculate isotope production at Run level."
 )
 parser.add_argument(
-    "--input", required=True, type=str, help="Ruta al archivo .root a procesar"
+    "--input", required=True, type=str, help="Path to the .root file to process"
 )
 parser.add_argument(
-    "--outdir", required=True, type=str, help="Directorio donde guardar el .csv"
+    "--outdir", required=True, type=str, help="Directory where the .csv will be saved"
 )
 args = parser.parse_args()
 
@@ -28,10 +28,10 @@ outdir = args.outdir
 os.makedirs(outdir, exist_ok=True)
 
 # ==============================================================================
-# CONFIGURACIÓN Y PARÁMETROS FÍSICOS (DETECCIÓN DINÁMICA)
+# CONFIGURATION AND PHYSICAL PARAMETERS (DYNAMIC DETECTION)
 # ==============================================================================
-# Detectar el beam momentum basado en la carpeta contenedora (p_340 -> -340, p_260 -> -260)
-beam_momentum = -340 # Valor por defecto por si acaso
+# Detect beam momentum based on the parent folder (p_340 -> -340, p_260 -> -260)
+beam_momentum = -340  # Default value just in case
 if "p_260" in filename:
     beam_momentum = -260
 elif "p_340" in filename:
@@ -45,11 +45,11 @@ t_start_win = 20.0
 t_threshold = 50.0
 t_end_win = 500.0
 
-# Extraer el número de Run dinámicamente del nombre del archivo
+# Dynamically extract Run number from the filename
 match = re.search(r"R(\d{4})\.root", os.path.basename(filename))
 run_number = match.group(1) if match else "Unknown"
 
-print(f">>> Iniciando Run {run_number} | Beam p: {beam_momentum} MeV/c...")
+print(f">>> Launching Run {run_number} | Beam p: {beam_momentum} MeV/c...")
 
 # ==============================================================================
 # LOAD BRANCHES 
@@ -80,8 +80,9 @@ with uproot.open(filename) as file:
     arrays_scalars = tree_scalars.arrays(scalar_branches, library="ak")
 
 # ==============================================================================
-# FILTERING and PION SELECTION
+# FILTERING AND QUALITY CHECKS
 # ==============================================================================
+# 1. Apply general detector quality checks to the data windows
 good_mask = (
     (arrays_windows["window_data_quality_mask"] == 0)
     & (arrays_windows["vme_evt_quality_bitmask"] == 0)
@@ -95,14 +96,17 @@ good_mask = (
 
 filtered_windows = arrays_windows[good_mask]
 
-#eveto_cut_value = arrays_scalars["act_tagger_cut"][0]
+# CORRECTION: Count total spills that successfully passed the detector quality checks
+n_spills_total = float(len(np.unique(filtered_windows.spill_counter))) if len(filtered_windows) > 0 else 1.0
+
+# 2. Apply the act_tagger threshold condition to select verified pions
 eveto_cut_value = ak.max(arrays_scalars["act_tagger_cut"])
 pion_mask = filtered_windows["vme_act_tagger"] < eveto_cut_value
 pion_events = filtered_windows[pion_mask]
 
 if len(pion_events) == 0:
     print(
-        f" [AVISO] Cero piones detectados en Run {run_number}. Finalizando de forma limpia."
+        f" [NOTICE] Zero pions detected in Run {run_number}. Exiting cleanly."
     )
     sys.exit(0)
 
@@ -117,7 +121,7 @@ df_pion_events = ak.to_dataframe(pion_events[target_branches]).reset_index(
 )
 
 # ==============================================================================
-# ALINEACIÓN TEMPORAL DE SPILLS
+# SPILL TEMPORAL ALIGNMENT
 # ==============================================================================
 spill_timing_map = {}
 unique_spills = np.unique(arrays_windows.spill_counter)
@@ -148,7 +152,7 @@ df_pion_events = df_pion_events.drop(columns=["t_start_spill_us"])
 dt = df_pion_events["t_end_spill [ms]"] - df_pion_events["t_pi [ms]"]
 
 # ==============================================================================
-# PROBABILITIES
+# PROBABILITIES (P(t))
 # ==============================================================================
 df_pion_events["p_12B_early"] = np.exp(-dt / TAU_12B) * (
     np.exp(-t_start_win / TAU_12B) - np.exp(-t_threshold / TAU_12B)
@@ -181,7 +185,35 @@ for col in [
     df_pion_events[col] = np.where(dt >= 0, df_pion_events[col], 0.0)
 
 # ==============================================================================
-# AGREGACIÓN POR RUN Y ESCRITURA DE OUTPUTS
+# N_pi,scale AND N_exp COMPUTATION (SLIDE FORMULA IMPLEMENTATION)
+# ==============================================================================
+n_pions_total_filtered = float(df_pion_events["event_number"].count())
+n_spills_filtered = float(df_pion_events["spill_counter"].nunique())
+
+# Formula: N_pi,scale = N_pi * (N_spills,filtered / N_spills,total)
+# Where both parameters are obtained post detector quality checking
+n_pi_scale = n_pions_total_filtered * (n_spills_filtered / n_spills_total)
+
+# Temporal mean probability of filtered pions <P(t)>
+mean_p_12B_early = df_pion_events["p_12B_early"].mean()
+mean_p_9Li_early = df_pion_events["p_9Li_early"].mean()
+mean_p_16N_early = df_pion_events["p_16N_early"].mean()
+
+mean_p_12B_late = df_pion_events["p_12B_late"].mean()
+mean_p_9Li_late = df_pion_events["p_9Li_late"].mean()
+mean_p_16N_late = df_pion_events["p_16N_late"].mean()
+
+# N_exp = N_pi,scale * <P(t)>
+n_12b_exp_early = n_pi_scale * mean_p_12B_early
+n_9li_exp_early = n_pi_scale * mean_p_9Li_early
+n_16n_exp_early = n_pi_scale * mean_p_16N_early
+
+n_12b_exp_late = n_pi_scale * mean_p_12B_late
+n_9li_exp_late = n_pi_scale * mean_p_9Li_late
+n_16n_exp_late = n_pi_scale * mean_p_16N_late
+
+# ==============================================================================
+# RUN-LEVEL AGGREGATION AND OUTPUT WRITING
 # ==============================================================================
 lbl_12B_early = f"N 12B exp ({t_start_win:.0f}-{t_threshold:.0f} ms)"
 lbl_9Li_early = f"N Li9 exp ({t_start_win:.0f}-{t_threshold:.0f} ms)"
@@ -194,18 +226,20 @@ df_by_run = pd.DataFrame(
     {
         "Run": [run_number],
         "Beam p (MeV/c)": [beam_momentum],
-        "N spills with pions": [df_pion_events["spill_counter"].nunique()],
-        "N pions (total)": [df_pion_events["event_number"].count()],
-        lbl_12B_early: [df_pion_events["p_12B_early"].sum().round(2)],
-        lbl_9Li_early: [df_pion_events["p_9Li_early"].sum().round(2)],
-        lbl_16N_early: [df_pion_events["p_16N_early"].sum().round(2)],
-        lbl_12B_late: [df_pion_events["p_12B_late"].sum().round(2)],
-        lbl_9Li_late: [df_pion_events["p_9Li_late"].sum().round(2)],
-        lbl_16N_late: [df_pion_events["p_16N_late"].sum().round(2)],
+        "N spills total": [n_spills_total],
+        "N spills with pions": [n_spills_filtered],
+        "N pions (filtered)": [n_pions_total_filtered],
+        "N pi scale": [round(n_pi_scale, 2)],
+        lbl_12B_early: [round(n_12b_exp_early, 2)],
+        lbl_9Li_early: [round(n_9li_exp_early, 2)],
+        lbl_16N_early: [round(n_16n_exp_early, 2)],
+        lbl_12B_late: [round(n_12b_exp_late, 2)],
+        lbl_9Li_late: [round(n_9li_exp_late, 2)],
+        lbl_16N_late: [round(n_16n_exp_late, 2)],
     }
 )
 
-# Guardar usando el número de run en el nombre del CSV
+# Save using the run number in the CSV filename
 out_csv_path = os.path.join(outdir, f"summary_R{run_number}.csv")
 df_by_run.to_csv(out_csv_path, index=False)
-print(f" [ÉXITO] Archivo guardado en: {out_csv_path}\n")
+print(f" [SUCCESS] File saved at: {out_csv_path}\n")

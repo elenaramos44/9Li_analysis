@@ -9,11 +9,17 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
 #SBATCH --time=1:00:00
-#SBATCH --array=0-11    # 12 runs
+#SBATCH --array=0-11    # Se mantiene por seguridad si se lanza manual
 
 echo "Setting environment for PKL conversion"
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
+# Corregido a tu entorno unificado
 conda activate /scratch/elena/conda-env/wcsim-env
+
+# CORRECCIÓN: Captura EXTRA_ARGS desde el entorno si $1 viene vacío
+if [ -z "$EXTRA_ARGS" ] && [ ! -z "$1" ]; then
+    EXTRA_ARGS="$1"
+fi
 
 RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
 TARGET_RUN=${RUNS[${SLURM_ARRAY_TASK_ID}]}
@@ -24,9 +30,9 @@ OUT_DIR=/scratch/elena/9Li/results/run${TARGET_RUN}/processed
 echo "--------------------------------------------------------"
 echo "Global Task: ${SLURM_ARRAY_TASK_ID} -> Processing Entire Run: $TARGET_RUN"
 echo "Output Directory: $OUT_DIR"
+echo "Extra Arguments: $EXTRA_ARGS"
 echo "--------------------------------------------------------"
 
-# Añadimos $EXTRA_ARGS al script de Python
 python3 $SCRIPT \
     --run $TARGET_RUN \
     --outdir $OUT_DIR \

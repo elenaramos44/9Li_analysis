@@ -46,13 +46,6 @@ JOB_OUT_2=$(sbatch --array=${ARRAY_RANGE} --dependency=afterok:${JOB_ID_1} --exp
 JOB_ID_2=$(echo "$JOB_OUT_2" | awk '{print $4}')
 echo "--> Deployed Stage 2 Job ID: $JOB_ID_2 (Dependent on $JOB_ID_1)"
 
-# ------------------------------------------------------------------------------
-# STAGE 3: Submit CSV Processing (Normalization) -> Waits for Stage 2
-# ------------------------------------------------------------------------------
-echo "Submitting Stage 3: PKL Normalization"
-JOB_OUT_3=$(sbatch --dependency=afterok:${JOB_ID_2} --export=ALL,EXTRA_ARGS="${SAMPLE_FLAG}" ${JOBS_DIR}/procesado_csv_multilat.sh)
-JOB_ID_3=$(echo "$JOB_OUT_3" | awk '{print $4}')
-echo "--> Deployed Stage 3 Job ID: $JOB_ID_3 (Dependent on $JOB_ID_2)"
 
 # ------------------------------------------------------------------------------
 # STAGE 4: Submit Final Refinement -> Waits for Stage 3
@@ -66,7 +59,8 @@ echo "--> Deployed Stage 4 Job ID: $JOB_ID_4 (Dependent on $JOB_ID_3)"
 # STAGE 5: Submit Final Fiducial Volume Cut & Merge -> Waits for Stage 4
 # ------------------------------------------------------------------------------
 echo "Submitting Stage 5: Final cut --> FV"
-JOB_OUT_5=$(sbatch --dependency=afterok:${JOB_ID_4} --export=ALL,EXTRA_ARGS="${SAMPLE_FLAG}" ${JOBS_DIR}/fv_cut.sh)
+# Añadimos --array=0-11 aquí también
+JOB_OUT_5=$(sbatch --array=0-11 --dependency=afterok:${JOB_ID_4} --export=ALL,EXTRA_ARGS="${SAMPLE_FLAG}" ${JOBS_DIR}/fv_cut.sh)
 JOB_ID_5=$(echo "$JOB_OUT_5" | awk '{print $4}')
 echo "--> Deployed Stage 5 Job ID: $JOB_ID_5 (Dependent on $JOB_ID_4)"
 

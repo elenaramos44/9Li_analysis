@@ -9,8 +9,6 @@
 #SBATCH --cpus-per-task=4         
 #SBATCH --mem=8G                 
 #SBATCH --time=2:00:00           
-       
-
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
@@ -21,6 +19,11 @@ export Geant4_DIR=/scratch/elena/geant4.10.03.p03-install/lib64/Geant4-10.3.3/Ge
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scratch/elena/wcsim-install/lib
 
 echo "WCSim environment setup ready"
+
+# ==============================================================================
+# CAPTURE EXTRA_ARGS FROM PIPELINE.SH
+# ==============================================================================
+EXTRA_ARGS=${1:-$EXTRA_ARGS}
 
 SCRIPT=/scratch/elena/9Li/scripts/refinement_all.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}

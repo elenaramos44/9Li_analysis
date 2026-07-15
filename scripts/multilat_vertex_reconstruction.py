@@ -7,7 +7,6 @@ import sys
 
 # Add path to your scripts
 sys.path.append("/scratch/elena/9Li/scripts")
-import functions_bonsai
 import functions_multilateration
 
 def parse_args():
@@ -82,11 +81,9 @@ def run_multilat_full_info(row, verbose=False):
 def main():
     args = parse_args()
 
-    if args.verbose:
-        print("Initializing geometry...")
-    
-    geo_df = functions_bonsai.get_geo_mapping()
-    functions_bonsai.geo = functions_bonsai.build_lookup_table(geo_df)
+    # --- MODIFICATION: Removed manual geometry initialization for bonsai ---
+    # The updated functions_multilateration handles loading and caching the internal
+    # repository .geo file automatically.
 
     # --- MODIFICACIÓN: Carga directa vía pickle (sin eval) ---
     if args.verbose:

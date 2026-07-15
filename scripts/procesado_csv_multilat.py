@@ -3,7 +3,6 @@ import pandas as pd
 from glob import glob
 import os
 import argparse
-import shutil
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Reformat multilateration outputs into standard stage filenames.")
@@ -17,18 +16,16 @@ def main():
     run = args.run
     outdir = args.outdir
 
-    # Buscamos los archivos generados por el STAGE 2 en la carpeta processed
+    # Safely find chunks based on dataset target type
     if args.bkg:
         input_pattern = os.path.join(outdir, "*_BKG_multilat.pkl")
+        input_files = glob(input_pattern)
         sample_label = "BACKGROUND"
     else:
         input_pattern = os.path.join(outdir, "*_multilat.pkl")
-        # Excluimos BKG si por error coge alguno
+        # Explicitly exclude background files to avoid overlaps
         input_files = [f for f in glob(input_pattern) if "_BKG_" not in os.path.basename(f)]
         sample_label = "SIGNAL"
-
-    if args.bkg:
-        input_files = glob(input_pattern)
 
     if not input_files:
         print(f"Warning: No PKL files were found matching {input_pattern} for {sample_label}")
@@ -38,18 +35,12 @@ def main():
 
     for f in input_files:
         try:
-            # Leemos el dataframe (que ya viene limpio y veloz del Stage 2)
             df = pd.read_pickle(f)
 
-            # Generamos el nombre estándar exacto que buscará tu script de Refinamiento (Stage 4)
-            if args.bkg:
-                # Ejemplo: Li9_clusters_chunk_0_BKG_multilat.pkl -> Li9_clusters_chunk_0_BKG.pkl
-                outname = os.path.basename(f).replace("_multilat.pkl", ".pkl")
-            else:
-                # Ejemplo: Li9_clusters_chunk_0_multilat.pkl -> Li9_clusters_chunk_0.pkl
-                outname = os.path.basename(f).replace("_multilat.pkl", ".pkl")
-
+            # Replaces the multilat tag back to a standard stage chunk file format
+            outname = os.path.basename(f).replace("_multilat.pkl", ".pkl")
             output_filepath = os.path.join(outdir, outname)
+            
             df.to_pickle(output_filepath)
             
         except Exception as e:

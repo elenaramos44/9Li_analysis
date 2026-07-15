@@ -7,7 +7,7 @@ import argparse
 import pandas as pd
 import numpy as np
 
-# setup
+#setup
 ROOT_PATH = "/scratch/elena/root-6.26.04-install"
 os.environ["ROOTSYS"] = ROOT_PATH
 os.environ["PYTHONPATH"] = f"{ROOT_PATH}/lib:{os.environ.get('PYTHONPATH', '')}"
@@ -18,163 +18,115 @@ os.environ["WCSIM_BUILD_DIR"] = "/scratch/elena/wcsim-install"
 os.environ["BONSAIDIR"] = "/scratch/elena/bonsai"
 
 sys.path.append("/scratch/elena/9Li/scripts")
+import functions_bonsai
 import functions_multilateration
-import geometry_wcte
 
-c_n = 29.9792458 / 1.33
-
+c_n = 29.9792458 / 1.33  
 
 def refine_cluster(row):
     """Refines a single cluster vertex using multilateration after filtering hits."""
-
-    times = np.array(row["hit_times_ns"])
-    mpmt_ids = np.array(row["hit_slot_ids"])
-    pmt_ids = np.array(row["hit_position_ids"])
-    v_init = np.array([row["vertex_x"], row["vertex_y"], row["vertex_z"]])
-
+    times = np.array(row['hit_times_ns'])
+    mpmt_ids = np.array(row['hit_slot_ids'])
+    pmt_ids = np.array(row['hit_position_ids'])
+    v_init = np.array([row['vertex_x'], row['vertex_y'], row['vertex_z']])
+    
     try:
-        # ------------------------------------------------------------------
-        # PMT positions from the official WCTE geometry (.geo)
-        # Returned in mm -> convert to cm
-        # ------------------------------------------------------------------
-
-        x_p, y_p, z_p = geometry_wcte.get_xyz(
-            mpmt_ids,
-            pmt_ids,
-            units="cm"
-        )
-
-   
-
+        # --- MODIFICATION: Legacy bonsai call uses the engine's internal cached geo mapping ---
+        x_p, y_p, z_p, _ = functions_bonsai.getxyz(functions_multilateration.geo, mpmt_ids, pmt_ids)
         pmt_pos = np.column_stack([x_p, y_p, z_p])
-
-        tof = np.linalg.norm(pmt_pos - v_init, axis=1) / c_n
+        
+        tof = np.linalg.norm(pmt_pos - v_init, axis=1) / c_n   
         t_corr = times - tof
         t0_guess = np.median(t_corr)
         dt = t_corr - t0_guess
-
+        
         clean_mask = (np.abs(dt) < 3.0)
         nhits_fine = np.sum(clean_mask)
-
+        
         if nhits_fine < 15:
-            return pd.Series(
-                [np.nan] * 5,
-                index=["v_x_fine", "v_y_fine", "v_z_fine", "t_rms_fine", "nhits_fine"]
-            )
+            return pd.Series([np.nan]*5, index=['v_x_fine', 'v_y_fine', 'v_z_fine', 't_rms_fine', 'nhits_fine'])
 
         vertex = functions_multilateration.run_multilateration_candidate(
-            times[clean_mask],
-            mpmt_ids[clean_mask],
-            pmt_ids[clean_mask],
-            sigma_t=2.2
+            times[clean_mask], mpmt_ids[clean_mask], pmt_ids[clean_mask],
+            sigma_t=2.2,
+            guess=(v_init[0], v_init[1], v_init[2], t0_guess)
         )
-
+        
         if vertex["success"]:
-            t_rms_final = np.std(vertex["pulls"] * 2.2)
-
-            return pd.Series(
-                [
-                    vertex["x"],
-                    vertex["y"],
-                    vertex["z"],
-                    t_rms_final,
-                    nhits_fine,
-                ],
-                index=[
-                    "v_x_fine",
-                    "v_y_fine",
-                    "v_z_fine",
-                    "t_rms_fine",
-                    "nhits_fine",
-                ],
-            )
-
+            t_rms_final = np.std(vertex["pulls"] * 2.2)   
+            return pd.Series([vertex['x'], vertex['y'], vertex['z'], t_rms_final, nhits_fine], 
+                             index=['v_x_fine', 'v_y_fine', 'v_z_fine', 't_rms_fine', 'nhits_fine'])
     except Exception:
         pass
-
-    return pd.Series(
-        [np.nan] * 5,
-        index=["v_x_fine", "v_y_fine", "v_z_fine", "t_rms_fine", "nhits_fine"],
-    )
+    
+    return pd.Series([np.nan]*5, index=['v_x_fine', 'v_y_fine', 'v_z_fine', 't_rms_fine', 'nhits_fine'])
 
 
 def main():
     parser = argparse.ArgumentParser(description="Refinement for 9Li data")
     parser.add_argument("--run", type=int, required=True, help="run_number")
     parser.add_argument("--chunk-id", type=int, required=True, help="chunk_id")
-    parser.add_argument(
-        "--bkg",
-        action="store_true",
-        help="Process background files instead of signal",
-    )
+    # --- MODIFICACIÓN: Añadida la bandera para discriminar muestras ---
+    parser.add_argument("--bkg", action="store_true", help="Process background files instead of signal")
     args = parser.parse_args()
 
     processed_folder = f"/scratch/elena/9Li/results/run{args.run}/processed"
-
+    
+    # --- MODIFICACIÓN: Búsqueda dinámica basada en la muestra ---
     if args.bkg:
-        search_pattern = f"{processed_folder}/Li9_clusters_chunk_{args.chunk_id}_BKG_multilat.pkl"
+        search_pattern = f"{processed_folder}/Li9_clusters_chunk_{args.chunk_id}_BKG.pkl"
         output_filename = f"Refine_Li9_clusters_chunk_{args.chunk_id}_BKG.pkl"
         sample_label = "BACKGROUND"
     else:
-        search_pattern = f"{processed_folder}/Li9_clusters_chunk_{args.chunk_id}_multilat.pkl"
+        search_pattern = f"{processed_folder}/Li9_clusters_chunk_{args.chunk_id}.pkl"
         output_filename = f"Refine_Li9_clusters_chunk_{args.chunk_id}.pkl"
         sample_label = "SIGNAL"
-
+        
     matching_files = glob.glob(search_pattern)
-
+    
     if not matching_files:
-        print(
-            f"Error: No matching file found for {sample_label} Run {args.run}, "
-            f"Chunk {args.chunk_id} ({search_pattern})"
-        )
+        print(f"Error: No matching file found for {sample_label} Run {args.run}, Chunk {args.chunk_id} ({search_pattern})")
         sys.exit(1)
-
+        
     input_filepath = matching_files[0]
     output_filepath = os.path.join(processed_folder, output_filename)
+    
+    # --- MODIFICATION: Removed old manual geometry initialization for bonsai ---
+    # The updated functions_multilateration pipeline automatically manages loading,
+    # building, and tracking the official collaboration geometry layout internally.
 
     print(f"Processing input {sample_label} file: {os.path.basename(input_filepath)}")
-
     df_chunk = pd.read_pickle(input_filepath)
-
+    
     if df_chunk.empty:
         print("Input dataframe is empty. Writing empty file to disk.")
-        df_empty = pd.DataFrame(
-            columns=list(df_chunk.columns)
-            + ["v_x_fine", "v_y_fine", "v_z_fine", "t_rms_fine", "nhits_fine"]
-        )
+        df_empty = pd.DataFrame(columns=list(df_chunk.columns) + ['v_x_fine', 'v_y_fine', 'v_z_fine', 't_rms_fine', 'nhits_fine'])
         df_empty.to_pickle(output_filepath)
         return
 
-    mask_pre = (
-        (df_chunk["fit_success"] == True)
-        & (df_chunk["time_rms"] < 3.0)
-        & (df_chunk["vertex_x"].abs() < 270)
-        & (df_chunk["vertex_y"].abs() < 270)
-    )
-
+    mask_pre = (df_chunk['fit_success'] == True) & \
+               (df_chunk['time_rms'] < 3.0) & \
+               (df_chunk['vertex_x'].abs() < 270) & \
+               (df_chunk['vertex_y'].abs() < 270)
+               
     df_to_refine = df_chunk[mask_pre].copy()
-
     print(f"Candidates passing pre-filter: {len(df_to_refine)} / {len(df_chunk)}")
 
     if df_to_refine.empty:
         print("No candidates to refine. Writing empty results.")
-        df_empty = pd.DataFrame(
-            columns=list(df_chunk.columns)
-            + ["v_x_fine", "v_y_fine", "v_z_fine", "t_rms_fine", "nhits_fine"]
-        )
+        df_empty = pd.DataFrame(columns=list(df_chunk.columns) + ['v_x_fine', 'v_y_fine', 'v_z_fine', 't_rms_fine', 'nhits_fine'])
         df_empty.to_pickle(output_filepath)
         return
 
+    # Updated: removed lookup_table reference argument since tracking is handled globally
     refined_results = df_to_refine.apply(refine_cluster, axis=1)
     df_final = pd.concat([df_to_refine, refined_results], axis=1)
-
-    df_final = df_final.dropna(subset=["t_rms_fine"])
-
+    
+    df_final = df_final.dropna(subset=['t_rms_fine'])
+    
     df_final.to_pickle(output_filepath)
-
     print(f"Successfully saved refinement data to {output_filepath}")
     print(f"Final valid clusters remaining: {len(df_final)}")
-
 
 if __name__ == "__main__":
     main()

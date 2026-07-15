@@ -11,7 +11,6 @@
 #SBATCH --time=4:00:00
 
 
-
 echo "Setting environment for multilateration"
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
@@ -70,6 +69,7 @@ fi
 
 IN_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
 OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed" # Guardar todo en processed para simplificar rutas
+#OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/test_new_geo"
 
 # Definimos el nombre del archivo de entrada según la muestra procesada
 if [[ "$EXTRA_ARGS" == "--bkg" ]]; then

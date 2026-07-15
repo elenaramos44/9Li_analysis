@@ -4,6 +4,13 @@ import pandas as pd
 import array
 import ROOT
 import cppyy
+import sys
+
+sys.path.insert(0, "/scratch/elena/Geometry_WCTE")
+from Geometry.Device import Device
+
+_WCD = None
+_PMT_POS = {}
 
 
 # =========================================================
@@ -43,9 +50,8 @@ def init_bonsai_environment():
 
 def get_geo_mapping():
     """
-    Load PMT geometry table.
+    Load PMT geometry table and transform it to official WCTE convention (Y=0 at beam pipe).
     """
-
     path = os.environ["BONSAIDIR"] + "/NiCf/geofile_NuPRISMBeamTest_16cShort_mPMT.txt"
 
     geo = pd.read_csv(
@@ -54,6 +60,10 @@ def get_geo_mapping():
         skiprows=5,
         names=["id", "mpmtid", "spmtid", "x", "y", "z", "dx", "dy", "dz", "cyloc"]
     )
+
+    # --- CORRECCIÓN DE COORDENADAS PARA CONVENIO WCTE ---
+    # Desplazamos la Y de todos los PMTs para centrar el Beam Pipe en 0.0 cm
+    geo['y'] = geo['y'] + 42.4725  # Usa el offset exacto de tu simulación (~42.47 cm)
 
     return geo
 
