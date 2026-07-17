@@ -25,78 +25,132 @@ c_n = 29.9792458 / 1.33
 
 
 def refine_cluster(row):
-    """Refines a single cluster vertex using multilateration after filtering hits."""
+    """
+    Refine a cluster vertex iteratively.
+
+    Algorithm:
+      1) Start from the vertex obtained in the first reconstruction.
+      2) Compute TOF and residual times.
+      3) Reject hits with |dt| > 3 ns.
+      4) Reconstruct a new vertex using only the surviving hits.
+      5) Repeat 3 times.
+    """
 
     times = np.array(row["hit_times_ns"])
     mpmt_ids = np.array(row["hit_slot_ids"])
     pmt_ids = np.array(row["hit_position_ids"])
-    v_init = np.array([row["vertex_x"], row["vertex_y"], row["vertex_z"]])
+
+    # First-pass vertex
+    vertex_current = np.array([
+        row["vertex_x"],
+        row["vertex_y"],
+        row["vertex_z"]
+    ])
 
     try:
-        # ------------------------------------------------------------------
-        # PMT positions from the official WCTE geometry (.geo)
-        # Returned in mm -> convert to cm
-        # ------------------------------------------------------------------
 
+        # PMT coordinates (cm)
         x_p, y_p, z_p = geometry_wcte.get_xyz(
             mpmt_ids,
             pmt_ids,
             units="cm"
         )
 
-   
-
         pmt_pos = np.column_stack([x_p, y_p, z_p])
 
-        tof = np.linalg.norm(pmt_pos - v_init, axis=1) / c_n
-        t_corr = times - tof
-        t0_guess = np.median(t_corr)
-        dt = t_corr - t0_guess
+        # ==========================================================
+        # Iterative refinement (similar spirit to Kouki's approach)
+        # ==========================================================
 
-        clean_mask = (np.abs(dt) < 3.0)
-        nhits_fine = np.sum(clean_mask)
+        for iteration in range(3):
 
-        if nhits_fine < 15:
-            return pd.Series(
-                [np.nan] * 5,
-                index=["v_x_fine", "v_y_fine", "v_z_fine", "t_rms_fine", "nhits_fine"]
+            tof = np.linalg.norm(
+                pmt_pos - vertex_current,
+                axis=1
+            ) / c_n
+
+            t_corr = times - tof
+            t0_guess = np.median(t_corr)
+            dt = t_corr - t0_guess
+
+            clean_mask = np.abs(dt) < 3.0
+            nhits_fine = np.sum(clean_mask)
+
+            if nhits_fine < 15:
+                return pd.Series(
+                    [np.nan] * 5,
+                    index=[
+                        "v_x_fine",
+                        "v_y_fine",
+                        "v_z_fine",
+                        "t_rms_fine",
+                        "nhits_fine",
+                    ],
+                )
+
+            vertex = functions_multilateration.run_multilateration_candidate(
+                times[clean_mask],
+                mpmt_ids[clean_mask],
+                pmt_ids[clean_mask],
+                sigma_t=2.2,
+                initial_vertex=vertex_current
             )
 
-        vertex = functions_multilateration.run_multilateration_candidate(
-            times[clean_mask],
-            mpmt_ids[clean_mask],
-            pmt_ids[clean_mask],
-            sigma_t=2.2
+            if not vertex["success"]:
+                return pd.Series(
+                    [np.nan] * 5,
+                    index=[
+                        "v_x_fine",
+                        "v_y_fine",
+                        "v_z_fine",
+                        "t_rms_fine",
+                        "nhits_fine",
+                    ],
+                )
+
+            # Update seed for next iteration
+            vertex_current = np.array([
+                vertex["x"],
+                vertex["y"],
+                vertex["z"]
+            ])
+
+        # ==========================================================
+        # Final quantities after last iteration
+        # ==========================================================
+
+        t_rms_final = np.std(vertex["pulls"] * 1.5)
+
+        return pd.Series(
+            [
+                vertex["x"],
+                vertex["y"],
+                vertex["z"],
+                t_rms_final,
+                nhits_fine,
+            ],
+            index=[
+                "v_x_fine",
+                "v_y_fine",
+                "v_z_fine",
+                "t_rms_fine",
+                "nhits_fine",
+            ],
         )
-
-        if vertex["success"]:
-            t_rms_final = np.std(vertex["pulls"] * 2.2)
-
-            return pd.Series(
-                [
-                    vertex["x"],
-                    vertex["y"],
-                    vertex["z"],
-                    t_rms_final,
-                    nhits_fine,
-                ],
-                index=[
-                    "v_x_fine",
-                    "v_y_fine",
-                    "v_z_fine",
-                    "t_rms_fine",
-                    "nhits_fine",
-                ],
-            )
 
     except Exception:
         pass
 
     return pd.Series(
         [np.nan] * 5,
-        index=["v_x_fine", "v_y_fine", "v_z_fine", "t_rms_fine", "nhits_fine"],
+        index=[
+            "v_x_fine",
+            "v_y_fine",
+            "v_z_fine",
+            "t_rms_fine",
+            "nhits_fine",
+        ],
     )
-
 
 def main():
     parser = argparse.ArgumentParser(description="Refinement for 9Li data")

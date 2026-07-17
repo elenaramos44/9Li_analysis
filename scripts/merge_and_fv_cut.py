@@ -51,7 +51,7 @@ def main():
     # FV limits
     x_lims = [-20.0, 20.0]
     y_lims = [-20.0, 20.0]    #y=0 in WCTE data!!
-    z_lims = [-138.0, 0.0]
+    z_lims = [0.0, 138.0]
 
     fv_mask = (df_all_refined['v_x_fine'] >= x_lims[0]) & (df_all_refined['v_x_fine'] <= x_lims[1]) & \
               (df_all_refined['v_y_fine'] >= y_lims[0]) & (df_all_refined['v_y_fine'] <= y_lims[1]) & \
