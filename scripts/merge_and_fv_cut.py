@@ -13,17 +13,17 @@ def main():
 
     run_dir = f"/scratch/elena/9Li/results/run{args.run}/processed"
     
-    # Define search patterns and labels dynamically based on the --bkg flag
+    # Replace your glob selection logic with this:
     if args.bkg:
         search_pattern = os.path.join(run_dir, "Refine_Li9_clusters_chunk*_BKG.pkl")
         sample_label = "BACKGROUND"
         output_filename = f"Final_FV_Li9_clusters_run{args.run}_BKG.pkl"
+        refined_files = sorted(glob.glob(search_pattern))
     else:
         search_pattern = os.path.join(run_dir, "Refine_Li9_clusters_chunk*.pkl")
         sample_label = "SIGNAL"
         output_filename = f"Final_FV_Li9_clusters_run{args.run}.pkl"
 
-    refined_files = sorted(glob.glob(search_pattern))
     
     # Filter out background files if we are processing the Signal sample
     if not args.bkg:
@@ -51,7 +51,7 @@ def main():
     # FV limits
     x_lims = [-20.0, 20.0]
     y_lims = [-20.0, 20.0]    #y=0 in WCTE data!!
-    z_lims = [0.0, 138.0]
+    z_lims = [-130.0, 0.0]
 
     fv_mask = (df_all_refined['v_x_fine'] >= x_lims[0]) & (df_all_refined['v_x_fine'] <= x_lims[1]) & \
               (df_all_refined['v_y_fine'] >= y_lims[0]) & (df_all_refined['v_y_fine'] <= y_lims[1]) & \

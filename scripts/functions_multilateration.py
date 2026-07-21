@@ -134,15 +134,23 @@ def run_multilateration_timecal(
 
         return (times0-eps-tofs)/sigma_ts
 
+
     def jac(pars):
         loc = pars[:3]
-        light_vecs = pmt_locs-loc
-        dists = np.linalg.norm(light_vecs,axis=1)
-        dists = np.where(dists==0,1e-12,dists)
-        jac_xyz = light_vecs/dists[:,None]/vc/sigma_ts[:,None]
-        jac_eps = -1/sigma_ts
+        light_vecs = pmt_locs - loc
+        dists = np.linalg.norm(light_vecs, axis=1)
+        dists = np.where(dists == 0, 1e-12, dists)
 
-        return np.column_stack([jac_xyz,jac_eps])
+        jac_xyz = (
+            light_vecs  # <--- AGREGAR ESTE SIGNO MENOS
+            / dists[:, None]
+            / vc
+            / sigma_ts[:, None]
+        )
+        jac_eps = -1.0 / sigma_ts
+
+        return np.column_stack([jac_xyz, jac_eps])
+
 
     result = least_squares(
         rho,
@@ -369,13 +377,9 @@ def run_multilateration_candidate(
     # ------------------------------------------------------------
 
     def jac(pars):
-
         loc = pars[:3]
-
         light_vecs = pmt_locs - loc
-
         dists = np.linalg.norm(light_vecs, axis=1)
-
         dists = np.where(dists == 0, 1e-12, dists)
 
         jac_xyz = (
@@ -384,7 +388,6 @@ def run_multilateration_candidate(
             / vc
             / sigma_ts[:, None]
         )
-
         jac_eps = -1.0 / sigma_ts
 
         return np.column_stack([jac_xyz, jac_eps])

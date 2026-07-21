@@ -32,13 +32,17 @@ if [ -z "$TARGET_RUN" ]; then
     exit 1
 fi
 
-# CORRECCIÓN: Asegurar captura de EXTRA_ARGS heredado
-if [ -z "$EXTRA_ARGS" ] && [ ! -z "$1" ]; then
+
+
+if [ ! -z "$1" ]; then
     EXTRA_ARGS="$1"
+elif [ -z "$EXTRA_ARGS" ]; then
+    EXTRA_ARGS=""
 fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Merge and FV Cut Selection for Run=${TARGET_RUN} (Args: $EXTRA_ARGS)"
 
+# Ejecución robusta
 python3 $SCRIPT --run $TARGET_RUN $EXTRA_ARGS
 
 echo "Process completed successfully for Run=${TARGET_RUN}"

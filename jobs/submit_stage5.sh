@@ -24,8 +24,8 @@ echo "Submitting Stage 5 array..."
 
 JOB_OUT=$(sbatch \
     --array=0-11 \
-    --export=ALL,EXTRA_ARGS="${SAMPLE_FLAG}" \
-    ${JOBS_DIR}/fv_cut.sh)
+    --export=ALL \
+    ${JOBS_DIR}/fv_cut.sh "${SAMPLE_FLAG}")
 
 JOB_ID=$(echo "$JOB_OUT" | awk '{print $4}')
 
