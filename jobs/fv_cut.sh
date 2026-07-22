@@ -8,8 +8,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=12G
-#SBATCH --time=0:30:00            
-#SBATCH --array=0-11              
+#SBATCH --time=0:30:00
+#SBATCH --array=0-11
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
@@ -32,17 +32,11 @@ if [ -z "$TARGET_RUN" ]; then
     exit 1
 fi
 
-
-
-if [ ! -z "$1" ]; then
-    EXTRA_ARGS="$1"
-elif [ -z "$EXTRA_ARGS" ]; then
-    EXTRA_ARGS=""
-fi
+# Pasar TODOS los argumentos al script de Python
+EXTRA_ARGS="$@"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Merge and FV Cut Selection for Run=${TARGET_RUN} (Args: $EXTRA_ARGS)"
 
-# Ejecución robusta
 python3 $SCRIPT --run $TARGET_RUN $EXTRA_ARGS
 
 echo "Process completed successfully for Run=${TARGET_RUN}"
