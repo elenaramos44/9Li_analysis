@@ -157,6 +157,14 @@ def main():
   output_filepath = os.path.join(processed_folder, output_filename)
 
   df_chunk = pd.read_pickle(input_filepath)
+
+  # Columnas esperadas estándar del pipeline previa a esta etapa
+  COLUMNAS_BASE = [
+      "spill_id", "hit_times_ns", "hit_slot_ids", "hit_position_ids",
+      "vertex_x", "vertex_y", "vertex_z", "fit_success", "n_hits_used",
+      "time_rms", "chi2", "ndof", "chi2_ndof"
+  ]
+  
   columnas_nuevas = [
       "v_x_fine",
       "v_y_fine",
@@ -165,8 +173,10 @@ def main():
       "hits_after",
   ]
 
-  if df_chunk.empty:
-    df_empty = pd.DataFrame(columns=list(df_chunk.columns) + columnas_nuevas)
+  # Gestión segura de DataFrames vacíos para preservar el esquema de columnas
+  if df_chunk.empty or ("fit_success" not in df_chunk.columns):
+    all_cols = list(dict.fromkeys(list(df_chunk.columns) + COLUMNAS_BASE + columnas_nuevas))
+    df_empty = pd.DataFrame(columns=all_cols)
     df_empty.to_pickle(output_filepath)
     return
 
@@ -174,7 +184,8 @@ def main():
   df_to_refine = df_chunk[mask_pre].copy()
 
   if df_to_refine.empty:
-    df_empty = pd.DataFrame(columns=list(df_chunk.columns) + columnas_nuevas)
+    all_cols = list(dict.fromkeys(list(df_chunk.columns) + COLUMNAS_BASE + columnas_nuevas))
+    df_empty = pd.DataFrame(columns=all_cols)
     df_empty.to_pickle(output_filepath)
     return
 

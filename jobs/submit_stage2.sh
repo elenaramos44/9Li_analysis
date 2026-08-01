@@ -21,7 +21,7 @@ else
     ARRAY_RANGE="0-287%10"
 fi
 
-echo "Submitting Stage 2..."
+echo "Submitting Stage 2 array..."
 
 JOB_OUT=$(sbatch \
     --array=${ARRAY_RANGE} \
@@ -30,10 +30,17 @@ JOB_OUT=$(sbatch \
 
 JOB_ID=$(echo "$JOB_OUT" | awk '{print $4}')
 
+if [ -z "$JOB_ID" ]; then
+    echo "Error: Failed to submit Stage 2 Array!"
+    exit 1
+fi
+
 echo "Stage 2 submitted with Job ID: ${JOB_ID}"
 
-# Launch the next launcher, but only after Stage 2 finishes
+echo "Submitting Stage 4 launcher (waiting for Stage 2 Job ID: ${JOB_ID})..."
+
+# Launch the next launcher after Stage 2 finishes
 sbatch \
-    --dependency=afterok:${JOB_ID} \
+    --dependency=afterany:${JOB_ID} \
     --export=ALL,EXTRA_ARGS="${SAMPLE_FLAG}" \
     ${JOBS_DIR}/submit_stage4.sh

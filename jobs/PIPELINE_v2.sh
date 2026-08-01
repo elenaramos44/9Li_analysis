@@ -44,16 +44,21 @@ JOB_OUT_1=$(sbatch \
 
 JOB_ID_1=$(echo "$JOB_OUT_1" | awk '{print $4}')
 
+if [ -z "$JOB_ID_1" ]; then
+    echo "Error: Failed to submit Stage 1 Array!"
+    exit 1
+fi
+
 echo "--> Deployed Stage 1 Job ID: $JOB_ID_1"
 
 # ------------------------------------------------------------------------------
 # Submit Stage 2 launcher
 # ------------------------------------------------------------------------------
 
-echo "Submitting Stage 2 launcher"
+echo "Submitting Stage 2 launcher (waiting for Stage 1 Job ID: $JOB_ID_1)..."
 
 JOB_OUT_2=$(sbatch \
-    --dependency=afterok:${JOB_ID_1} \
+    --dependency=afterany:${JOB_ID_1} \
     --export=ALL,EXTRA_ARGS="${SAMPLE_FLAG}" \
     ${JOBS_DIR}/submit_stage2.sh)
 

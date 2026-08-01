@@ -15,7 +15,18 @@ def parse_args():
 def main():
     args = parse_args()
     
-    momentum_dir = "p_340" if args.run in [1846, 1848] else "p_260"
+    # ---------------------------------------------------------------------
+    # Determinación dinámica del subdirectorio de datos según el run
+    # ---------------------------------------------------------------------
+    gd_runs = [2407, 2408, 2409, 2432, 2434, 2438]
+    
+    if args.run in gd_runs or args.run >= 2400:
+        momentum_dir = "Gd/p_270"
+    elif args.run in [1846, 1848]:
+        momentum_dir = "p_340"
+    else:
+        momentum_dir = "p_260"
+
     input_file = os.path.join(args.in_base, momentum_dir, f"WCTE_merged_production_R{args.run}.root")
     output_dir = os.path.join(args.out_base, momentum_dir)
     os.makedirs(output_dir, exist_ok=True)
@@ -28,7 +39,6 @@ def main():
         print(f"Error: Input file {input_file} does not exist.")
         return
 
-    # Añadimos vme_act_eveto para hacer la purga de electrones
     branches_to_keep = [
         "window_time",
         "spill_counter",
@@ -47,8 +57,7 @@ def main():
         "T5_HasOutOfTimeWindow",
         "T5_HasInTimeWindow",
         "T5_particle_nr",
-        "vme_act_tagger",
-        "vme_act_eveto"
+        "vme_act_tagger"
     ]
 
     with uproot.open(input_file) as f_in:
@@ -60,7 +69,7 @@ def main():
 
     print(f"Loaded {len(arrays_win)} readout windows with essential branches.")
 
-    # 1. Quality Cuts
+    # Quality Cuts and T5
     mask_quality = (
         (arrays_win["window_data_quality_mask"] == 0) &
         (arrays_win["vme_evt_quality_bitmask"] == 0) &
@@ -72,31 +81,26 @@ def main():
         (arrays_win["T5_particle_nr"] == 1)
     )
     
-    # 2. PID en 2 pasos (Sugerencia del experto del beam)
-    # Etapa A: Filtrar electrones con act_eveto
-    eveto_cut = arrays_sc["act_eveto_cut"][0] if "act_eveto_cut" in arrays_sc.fields else 3.92
-    mask_no_electrons = (arrays_win["vme_act_eveto"] < eveto_cut)
-
-    # Etapa B: Identificar Piones sobre eventos limpios de electrones
     tagger_cut = arrays_sc["act_tagger_cut"][0]
-    mask_pion_event = mask_quality & mask_no_electrons & (arrays_win["vme_act_tagger"] < tagger_cut)
+    mask_pion_event = (arrays_win["vme_act_tagger"] < tagger_cut) & mask_quality
 
-    # 3. Clasificación a nivel de SPILL completo
+    # Extrapolar a nivel de SPILL completo
     pion_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][mask_pion_event]))
     all_spills_vec = ak.to_numpy(arrays_win["spill_counter"])
     
     signal_window_mask = np.isin(all_spills_vec, pion_spills)
     bkg_window_mask = ~signal_window_mask
 
-    print(f"Found {len(pion_spills)} unique spills containing true pions (without e- contamination).")
+    print(f"Found {len(pion_spills)} unique spills containing pions.")
     print(f"Signal windows: {np.sum(signal_window_mask)} | Background windows: {np.sum(bkg_window_mask)}")
 
-    # Esquema de guardado por chunks
+    # Esquemas de tipos optimizados
     tree_schema = {field: arrays_win[field].type for field in branches_to_keep}
     scalar_schema = {field: arrays_sc[field].type for field in tree_scalars.keys()}
+
     chunk_step = 100000
 
-    # Guardar SIGNAL_SAMPLE
+    # SIGNAL SAMPLE
     print(f"Writing Signal output in chunks: {out_signal_path}")
     signal_arrays = arrays_win[signal_window_mask]
     num_signal = len(signal_arrays)
@@ -112,7 +116,7 @@ def main():
             f_sig["WCTEReadoutWindows"].extend({field: chunk[field] for field in branches_to_keep})
             print(f"  -> Written signal entries {i} to {min(i + chunk_step, num_signal)}")
 
-    # Guardar BACKGROUND_SAMPLE
+    # BACKGROUND SAMPLE
     print(f"Writing Background output in chunks: {out_bkg_path}")
     bkg_arrays = arrays_win[bkg_window_mask]
     num_bkg = len(bkg_arrays)

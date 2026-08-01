@@ -37,14 +37,21 @@ JOB_OUT=$(sbatch \
 
 JOB_ID=$(echo "$JOB_OUT" | awk '{print $4}')
 
+if [ -z "$JOB_ID" ]; then
+    echo "Error: Failed to submit Stage 4 Array!"
+    exit 1
+fi
+
 echo "Stage 4 submitted successfully."
 echo "Job ID: ${JOB_ID}"
 
-echo "Submitting Stage 5 launcher..."
+echo "Submitting Stage 5 launcher (waiting for Stage 4 Job ID: ${JOB_ID})..."
 
 sbatch \
-    --dependency=afterok:${JOB_ID} \
+    --dependency=afterany:${JOB_ID} \
     --export=ALL,EXTRA_ARGS="${SAMPLE_FLAG}" \
     ${JOBS_DIR}/submit_stage5.sh
 
-echo "Done."
+echo "==============================================================="
+echo "Stage 4 and Stage 5 chain successfully submitted!"
+echo "==============================================================="
