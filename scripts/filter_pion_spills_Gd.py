@@ -16,12 +16,15 @@ def main():
     args = parse_args()
     
     # ---------------------------------------------------------------------
-    # Determinación dinámica del subdirectorio de datos según el run
+    # Determinación dinámica del subdirectorio de datos según el run (Gd y estándar)
     # ---------------------------------------------------------------------
-    gd_runs = [2407, 2408, 2409, 2432, 2434, 2438]
+    gd_p270_runs = [2407, 2408, 2409, 2432, 2434, 2438]
+    gd_p350_runs = [2374, 2379]
     
-    if args.run in gd_runs or args.run >= 2400:
+    if args.run in gd_p270_runs:
         momentum_dir = "Gd/p_270"
+    elif args.run in gd_p350_runs:
+        momentum_dir = "Gd/p_350"
     elif args.run in [1846, 1848]:
         momentum_dir = "p_340"
     else:
@@ -39,7 +42,7 @@ def main():
         print(f"Error: Input file {input_file} does not exist.")
         return
 
-    branches_to_keep = [
+    desired_branches = [
         "window_time",
         "spill_counter",
         "start_counter",
@@ -57,50 +60,90 @@ def main():
         "T5_HasOutOfTimeWindow",
         "T5_HasInTimeWindow",
         "T5_particle_nr",
-        "vme_act_tagger"
+        "T5_n_main_bunch_particles",
+        "vme_act_tagger",
+        "vme_act_eveto",
+        "vme_t0_time",
+        "vme_t1_time",
+        "vme_t4_time"
     ]
 
     with uproot.open(input_file) as f_in:
         tree_windows = f_in["WCTEReadoutWindows"]
         tree_scalars = f_in["vme_analysis_scalar_results"]
         
+        # Filtrar solo las ramas que existan realmente en este ROOT específico
+        available_branches = tree_windows.keys()
+        branches_to_keep = [b for b in desired_branches if b in available_branches]
+        
         arrays_win = tree_windows.arrays(branches_to_keep, library="ak")
         arrays_sc = tree_scalars.arrays(library="ak")
 
     print(f"Loaded {len(arrays_win)} readout windows with essential branches.")
 
-    # Quality Cuts and T5
-    mask_quality = (
-        (arrays_win["window_data_quality_mask"] == 0) &
-        (arrays_win["vme_evt_quality_bitmask"] == 0) &
-        (arrays_win["vme_digi_issues_bitmask"] == 0) &
-        (arrays_win["T5_HasValidHit"] == True) &
-        (arrays_win["T5_HasMultipleScintillatorsHit"] == False) &
-        (arrays_win["T5_HasOutOfTimeWindow"] == False) &
-        (arrays_win["T5_HasInTimeWindow"] == True) &
-        (arrays_win["T5_particle_nr"] == 1)
-    )
-    
-    tagger_cut = arrays_sc["act_tagger_cut"][0]
-    mask_pion_event = (arrays_win["vme_act_tagger"] < tagger_cut) & mask_quality
+    # 1. Event Quality Checks
+    data_quality = (arrays_win["window_data_quality_mask"] == 0) if "window_data_quality_mask" in arrays_win.fields else True
+    evt_quality = (arrays_win["vme_evt_quality_bitmask"] == 0) if "vme_evt_quality_bitmask" in arrays_win.fields else True
+    digi_issues = (arrays_win["vme_digi_issues_bitmask"] == 0) if "vme_digi_issues_bitmask" in arrays_win.fields else True
 
-    # Extrapolar a nivel de SPILL completo
+    # 2. T5 Selection (Riguroso tanto para ficheros antiguos como nuevos de Gd)
+    if "T5_HasValidHit" in arrays_win.fields:
+        # Ficheros estándar (p_260, p_340, R2374, etc.)
+        valid_hit = (arrays_win["T5_HasValidHit"] == True)
+        mult_scint = (arrays_win["T5_HasMultipleScintillatorsHit"] == False)
+        out_of_time = (arrays_win["T5_HasOutOfTimeWindow"] == False)
+        in_time = (arrays_win["T5_HasInTimeWindow"] == True)
+        particle_nr = (arrays_win["T5_particle_nr"] == 1)
+    else:
+        # Ficheros nuevos de Gd (ej. R2379) usando las ramas equivalentes disponibles
+        valid_hit = True
+        mult_scint = True
+        out_of_time = True
+        in_time = True
+        particle_nr = (arrays_win["T5_n_main_bunch_particles"] == 1) if "T5_n_main_bunch_particles" in arrays_win.fields else False
+
+    # 3. T0 / T1 / T4 Coincidence Checks
+    T0_hit = ~np.isnan(ak.to_numpy(arrays_win["vme_t0_time"])) if "vme_t0_time" in arrays_win.fields else True
+    T1_hit = ~np.isnan(ak.to_numpy(arrays_win["vme_t1_time"])) if "vme_t1_time" in arrays_win.fields else True
+    T4_hit = ~np.isnan(ak.to_numpy(arrays_win["vme_t4_time"])) if "vme_t4_time" in arrays_win.fields else True
+
+    good_mask = (
+        data_quality
+        & evt_quality
+        & digi_issues
+        & valid_hit
+        & mult_scint
+        & out_of_time
+        & in_time
+        & particle_nr
+        & T0_hit
+        & T1_hit
+        & T4_hit
+    )
+
+    # 4. Two-step PID Selection
+    eveto_cut = float(ak.to_numpy(arrays_sc["act_eveto_cut"])[0]) if "act_eveto_cut" in arrays_sc.fields else 3.92
+    mask_no_electrons = (arrays_win["vme_act_eveto"] < eveto_cut) if "vme_act_eveto" in arrays_win.fields else True
+
+    tagger_cut = float(ak.to_numpy(arrays_sc["act_tagger_cut"])[0]) if "act_tagger_cut" in arrays_sc.fields else 0.0
+    mask_pion_event = good_mask & mask_no_electrons & (arrays_win["vme_act_tagger"] < tagger_cut if "vme_act_tagger" in arrays_win.fields else True)
+
+    # 5. Spill-level Classification
     pion_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][mask_pion_event]))
     all_spills_vec = ak.to_numpy(arrays_win["spill_counter"])
     
     signal_window_mask = np.isin(all_spills_vec, pion_spills)
     bkg_window_mask = ~signal_window_mask
 
-    print(f"Found {len(pion_spills)} unique spills containing pions.")
+    print(f"Found {len(pion_spills)} unique spills containing true pions (without e- contamination).")
     print(f"Signal windows: {np.sum(signal_window_mask)} | Background windows: {np.sum(bkg_window_mask)}")
 
-    # Esquemas de tipos optimizados
+    # Chunk-based writing scheme
     tree_schema = {field: arrays_win[field].type for field in branches_to_keep}
     scalar_schema = {field: arrays_sc[field].type for field in tree_scalars.keys()}
+    chunk_step = 20000
 
-    chunk_step = 100000
-
-    # SIGNAL SAMPLE
+    # Write SIGNAL_SAMPLE
     print(f"Writing Signal output in chunks: {out_signal_path}")
     signal_arrays = arrays_win[signal_window_mask]
     num_signal = len(signal_arrays)
@@ -116,7 +159,7 @@ def main():
             f_sig["WCTEReadoutWindows"].extend({field: chunk[field] for field in branches_to_keep})
             print(f"  -> Written signal entries {i} to {min(i + chunk_step, num_signal)}")
 
-    # BACKGROUND SAMPLE
+    # Write BACKGROUND_SAMPLE
     print(f"Writing Background output in chunks: {out_bkg_path}")
     bkg_arrays = arrays_win[bkg_window_mask]
     num_bkg = len(bkg_arrays)

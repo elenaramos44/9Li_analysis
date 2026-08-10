@@ -16,7 +16,7 @@ echo "Time: $(date)"
 echo "================================================================"
 
 JOBS_DIR="/scratch/elena/9Li/jobs"
-GD_DIR="/scratch/elena/9Li/filtered_root/Gd/p_270"
+GD_BASE_DIR="/scratch/elena/9Li/filtered_root/Gd"
 CHUNK_SIZE=25000
 
 # ------------------------------------------------------------------------------
@@ -34,9 +34,9 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 2. Cálculo dinámico del rango del Slurm Array usando uproot
+# 2. Cálculo dinámico del rango del Slurm Array usando uproot (p_270 y p_350)
 # ------------------------------------------------------------------------------
-echo "Calculating total chunks for Gd (${SAMPLE_TYPE}) in ${GD_DIR}..."
+echo "Calculating total chunks for Gd (${SAMPLE_TYPE}) in ${GD_BASE_DIR} (p_270 & p_350)..."
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
@@ -44,7 +44,8 @@ conda activate /scratch/elena/conda-env/wcsim-env
 TOTAL_CHUNKS=$(python3 -c "
 import uproot, glob, math, os
 
-files = glob.glob('${GD_DIR}/*_${SAMPLE_TYPE}.root')
+# Buscar recursivamente en p_270 y p_350
+files = glob.glob('${GD_BASE_DIR}/*/*_${SAMPLE_TYPE}.root')
 total_entries = 0
 
 for f in files:
@@ -69,7 +70,6 @@ ARRAY_RANGE="0-${MAX_INDEX}%10"
 echo "--> Total Chunks calculated (size=${CHUNK_SIZE}): ${TOTAL_CHUNKS}"
 echo "--> Configured SLURM Array Range: ${ARRAY_RANGE}"
 
-# Únicamente pasamos --bkg si aplica, sin inventos raros
 EXTRA_FLAGS="${SAMPLE_FLAG}"
 
 # ------------------------------------------------------------------------------
