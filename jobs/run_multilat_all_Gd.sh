@@ -33,7 +33,8 @@ TASK_ID=${SLURM_ARRAY_TASK_ID}
 RESULTS_DIR="/scratch/elena/9Li/results"
 
 # Runs de Gadolinio (6 runs)
-RUNS=(2407 2408 2409 2432 2434 2438)
+#RUNS=(2407 2408 2409 2432 2434 2438)
+RUNS=(2374 2379)
 
 # ==============================================================================
 # CÁLCULO DINÁMICO DE CHUNKS EXISTENTES EN DISCO POR RUN

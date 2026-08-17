@@ -24,8 +24,11 @@ CHUNK_SIZE=25000
 SCRIPT=/scratch/elena/9Li/scripts/load_and_sliding_windows.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-RUNS=(2407 2408 2409 2432 2434 2438)
-GD_BASE_PATH="/scratch/elena/9Li/filtered_root/Gd/p_270"
+#RUNS=(2407 2408 2409 2432 2434 2438)
+#GD_BASE_PATH="/scratch/elena/9Li/filtered_root/Gd/p_270"
+
+RUNS=(2374 2379)
+GD_BASE_PATH="/scratch/elena/9Li/filtered_root/Gd/p_350"
 
 # ------------------------------------------------------------------------------
 # Determinar sufijo y flag para Python según la muestra

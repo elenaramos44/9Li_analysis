@@ -17,7 +17,8 @@ echo "==============================================================="
 
 JOBS_DIR="/scratch/elena/9Li/jobs"
 RESULTS_DIR="/scratch/elena/9Li/results"
-RUNS=(2407 2408 2409 2432 2434 2438)
+#RUNS=(2407 2408 2409 2432 2434 2438)
+RUNS=(2374 2379)
 
 # Recuperar flags pasadas desde la etapa anterior
 EXTRA_FLAGS="${EXTRA_ARGS}"

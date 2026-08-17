@@ -12,7 +12,8 @@
 
 JOBS_DIR="/scratch/elena/9Li/jobs"
 RESULTS_DIR="/scratch/elena/9Li/results"
-RUNS=(2407 2408 2409 2432 2434 2438)
+#RUNS=(2407 2408 2409 2432 2434 2438)
+RUNS=(2373 2379)
 
 # Recuperar flags pasadas desde la Etapa 1
 EXTRA_FLAGS="${EXTRA_ARGS}"
