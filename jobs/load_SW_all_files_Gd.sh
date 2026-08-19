@@ -27,7 +27,7 @@ TASK_ID=${SLURM_ARRAY_TASK_ID}
 #RUNS=(2407 2408 2409 2432 2434 2438)
 #GD_BASE_PATH="/scratch/elena/9Li/filtered_root/Gd/p_270"
 
-RUNS=(2374 2379)
+RUNS=(2379)
 GD_BASE_PATH="/scratch/elena/9Li/filtered_root/Gd/p_350"
 
 # ------------------------------------------------------------------------------

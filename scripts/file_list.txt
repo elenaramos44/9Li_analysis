@@ -10,3 +10,10 @@
 /data/elena/data/p_260/WCTE_merged_production_R1938.root
 /data/elena/data/p_260/WCTE_merged_production_R1939.root
 /data/elena/data/p_260/WCTE_merged_production_R1941.root
+/data/elena/data/Gd/p_270/WCTE_merged_production_R2407.root
+/data/elena/data/Gd/p_270/WCTE_merged_production_R2408.root
+/data/elena/data/Gd/p_270/WCTE_merged_production_R2409.root
+/data/elena/data/Gd/p_270/WCTE_merged_production_R2432.root
+/data/elena/data/Gd/p_270/WCTE_merged_production_R2438.root
+/data/elena/data/Gd/p_350/WCTE_merged_production_R2374.root
+/scratch/elena/Gd/p_350/WCTE_merged_production_R2379.root

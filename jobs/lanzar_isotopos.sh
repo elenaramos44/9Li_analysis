@@ -7,9 +7,9 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=4G
+#SBATCH --mem=48G
 #SBATCH --time=1:00:00
-#SBATCH --array=0-11     #12 runs
+#SBATCH --array=0-18     #18 runs (hemos añadido los de Gd!)
 
 echo "Setting environment for WCTE isotope calculation"
 

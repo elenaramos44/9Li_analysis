@@ -36,6 +36,11 @@ if "p_260" in filename:
     beam_momentum = -260
 elif "p_340" in filename:
     beam_momentum = -340
+elif "p_270" in filename:
+    beam_momentum = -270
+elif "p_350" in filename:
+    beam_momentum = -350
+
 
 TAU_12B = 30.0
 TAU_9LI = 257.0
@@ -64,13 +69,17 @@ window_branches = [
     "T5_HasInTimeWindow",
     "T5_particle_nr",
     "vme_act_tagger",
+    "vme_act_eveto",
     "window_time",
     "spill_counter",
     "event_number",
     "readout_number",
+    "vme_t0_time",
+    "vme_t1_time",
+    "vme_t4_time"
 ]
 
-scalar_branches = ["act_tagger_cut"]
+scalar_branches = ["act_tagger_cut", "act_eveto_cut"]
 
 with uproot.open(filename) as file:
     tree_windows = file["WCTEReadoutWindows"]
@@ -80,33 +89,55 @@ with uproot.open(filename) as file:
     arrays_scalars = tree_scalars.arrays(scalar_branches, library="ak")
 
 # ==============================================================================
-# FILTERING AND QUALITY CHECKS
+# FILTERING AND QUALITY CHECKS (INCLUDING T0, T1, T4 COINCIDENCES)
 # ==============================================================================
-# 1. Apply general detector quality checks to the data windows
+# 1. General detector quality checks and T5 selection
+data_quality = (arrays_windows["window_data_quality_mask"] == 0)
+evt_quality = (arrays_windows["vme_evt_quality_bitmask"] == 0)
+digi_issues = (arrays_windows["vme_digi_issues_bitmask"] == 0)
+
+valid_hit = (arrays_windows["T5_HasValidHit"] == True)
+mult_scint = (arrays_windows["T5_HasMultipleScintillatorsHit"] == False)
+out_of_time = (arrays_windows["T5_HasOutOfTimeWindow"] == False)
+in_time = (arrays_windows["T5_HasInTimeWindow"] == True)
+particle_nr = (arrays_windows["T5_particle_nr"] == 1)
+
+# 2. Coincidence checks (T0, T1, T4 must have valid hits / not NaN)
+T0_hit = ~np.isnan(ak.to_numpy(arrays_windows["vme_t0_time"]))
+T1_hit = ~np.isnan(ak.to_numpy(arrays_windows["vme_t1_time"]))
+T4_hit = ~np.isnan(ak.to_numpy(arrays_windows["vme_t4_time"]))
+
 good_mask = (
-    (arrays_windows["window_data_quality_mask"] == 0)
-    & (arrays_windows["vme_evt_quality_bitmask"] == 0)
-    & (arrays_windows["vme_digi_issues_bitmask"] == 0)
-    & (arrays_windows["T5_HasValidHit"] == True)
-    & (arrays_windows["T5_HasMultipleScintillatorsHit"] == False)
-    & (arrays_windows["T5_HasOutOfTimeWindow"] == False)
-    & (arrays_windows["T5_HasInTimeWindow"] == True)
-    & (arrays_windows["T5_particle_nr"] == 1)
+    data_quality
+    & evt_quality
+    & digi_issues
+    & valid_hit
+    & mult_scint
+    & out_of_time
+    & in_time
+    & particle_nr
+    & T0_hit
+    & T1_hit
+    & T4_hit
 )
 
 filtered_windows = arrays_windows[good_mask]
 
-# CORRECTION: Count total spills that successfully passed the detector quality checks
+# Total valid spills passing quality checks and coincidences
 n_spills_total = float(len(np.unique(filtered_windows.spill_counter))) if len(filtered_windows) > 0 else 1.0
 
-# 2. Apply the act_tagger threshold condition to select verified pions
-eveto_cut_value = ak.max(arrays_scalars["act_tagger_cut"])
-pion_mask = filtered_windows["vme_act_tagger"] < eveto_cut_value
-pion_events = filtered_windows[pion_mask]
+# 3. Two-step PID Selection (Electron veto + Pion tagger)
+eveto_cut_value = float(ak.to_numpy(arrays_scalars["act_eveto_cut"])[0]) if "act_eveto_cut" in arrays_scalars.fields else 3.92
+mask_no_electrons = (filtered_windows["vme_act_eveto"] < eveto_cut_value)
+
+tagger_cut_value = float(ak.to_numpy(arrays_scalars["act_tagger_cut"])[0])
+mask_pion_event = mask_no_electrons & (filtered_windows["vme_act_tagger"] < tagger_cut_value)
+
+pion_events = filtered_windows[mask_pion_event]
 
 if len(pion_events) == 0:
     print(
-        f" [NOTICE] Zero pions detected in Run {run_number}. Exiting cleanly."
+        f" [NOTICE] Zero pions detected in Run {run_number} after quality and PID cuts. Exiting cleanly."
     )
     sys.exit(0)
 
@@ -185,16 +216,13 @@ for col in [
     df_pion_events[col] = np.where(dt >= 0, df_pion_events[col], 0.0)
 
 # ==============================================================================
-# N_pi,scale AND N_exp COMPUTATION (SLIDE FORMULA IMPLEMENTATION)
+# N_pi,scale AND N_exp COMPUTATION
 # ==============================================================================
 n_pions_total_filtered = float(df_pion_events["event_number"].count())
 n_spills_filtered = float(df_pion_events["spill_counter"].nunique())
 
-# Formula: N_pi,scale = N_pi * (N_spills,filtered / N_spills,total)
-# Where both parameters are obtained post detector quality checking
 n_pi_scale = n_pions_total_filtered * (n_spills_filtered / n_spills_total)
 
-# Temporal mean probability of filtered pions <P(t)>
 mean_p_12B_early = df_pion_events["p_12B_early"].mean()
 mean_p_9Li_early = df_pion_events["p_9Li_early"].mean()
 mean_p_16N_early = df_pion_events["p_16N_early"].mean()
@@ -203,7 +231,6 @@ mean_p_12B_late = df_pion_events["p_12B_late"].mean()
 mean_p_9Li_late = df_pion_events["p_9Li_late"].mean()
 mean_p_16N_late = df_pion_events["p_16N_late"].mean()
 
-# N_exp = N_pi,scale * <P(t)>
 n_12b_exp_early = n_pi_scale * mean_p_12B_early
 n_9li_exp_early = n_pi_scale * mean_p_9Li_early
 n_16n_exp_early = n_pi_scale * mean_p_16N_early
@@ -239,7 +266,6 @@ df_by_run = pd.DataFrame(
     }
 )
 
-# Save using the run number in the CSV filename
 out_csv_path = os.path.join(outdir, f"summary_R{run_number}.csv")
 df_by_run.to_csv(out_csv_path, index=False)
 print(f" [SUCCESS] File saved at: {out_csv_path}\n")

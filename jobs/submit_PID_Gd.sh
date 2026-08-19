@@ -7,9 +7,9 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=48G
+#SBATCH --mem=96G
 #SBATCH --time=1:30:00
-#SBATCH --array=0-7%4           # 8 total tasks (0 to 7), max 4 running concurrently
+#SBATCH --array=0           # 8 total tasks (0 to 7), max 4 running concurrently
 
 mkdir -p /scratch/elena/9Li/filtered_root/log/%A
 
@@ -27,12 +27,14 @@ SCRIPT=/scratch/elena/9Li/scripts/filter_pion_spills_Gd.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
 # Only Gd runs (Gd/p_270 and Gd/p_350)
-RUNS=(
-    2407 2408 2409 2432 2434 2438 \
-    2374 2379
-)
+#RUNS=(
+#    2407 2408 2409 2432 2434 2438 \
+#    2374 2379
+#)
 
-TARGET_RUN=${RUNS[$TASK_ID]}
+#TARGET_RUN=${RUNS[$TASK_ID]}
+
+TARGET_RUN=2379
 
 if [ -z "$TARGET_RUN" ]; then
     echo "Error: TASK_ID $TASK_ID out of bounds."
@@ -44,7 +46,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Skimming Task=${TASK_ID} -> Proces
 # Execution block
 python3 $SCRIPT \
     --run $TARGET_RUN \
-    --in-base /data/elena/data \
+    --in-base /scratch/elena/ \
     --out-base /scratch/elena/9Li/filtered_root
 
 echo "Skimming Task finished successfully for run=${TARGET_RUN}"
