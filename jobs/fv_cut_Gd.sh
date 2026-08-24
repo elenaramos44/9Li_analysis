@@ -27,8 +27,7 @@ SCRIPT=/scratch/elena/9Li/scripts/merge_and_fv_cut.py
 INDEX=${SLURM_ARRAY_TASK_ID}
 
 # Lista de 6 runs de Gadolinio
-#RUNS=(2407 2408 2409 2432 2434 2438)
-RUNS=(2379)
+RUNS=(2407 2408 2409 2432 2438 2374 2379)
 
 TARGET_RUN=${RUNS[$INDEX]}
 

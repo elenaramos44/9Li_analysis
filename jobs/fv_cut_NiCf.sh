@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --qos=regular
-#SBATCH --job-name=AmBe_final_fv
-#SBATCH --output=/scratch/elena/9Li/results/log/merge_task_%j.out
-#SBATCH --error=/scratch/elena/9Li/results/log/merge_task_%j.err
+#SBATCH --job-name=NiCf_final_fv
+#SBATCH --output=/scratch/elena/9Li/results/log/merge_NiCf_task_%j.out
+#SBATCH --error=/scratch/elena/9Li/results/log/merge_NiCf_task_%j.err
 #SBATCH --partition=general
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -19,8 +19,6 @@ source /scratch/elena/geant4.10.03.p03-install/bin/geant4.sh
 export Geant4_DIR=/scratch/elena/geant4.10.03.p03-install/lib64/Geant4-10.3.3/Geant4Config.cmake
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scratch/elena/wcsim-install/lib
 
-echo "WCSim environment setup ready"
-
 SCRIPT=/scratch/elena/9Li/scripts/merge_and_fv_cut.py
 
 # ------------------------------------------------
@@ -29,42 +27,57 @@ SCRIPT=/scratch/elena/9Li/scripts/merge_and_fv_cut.py
 
 if [ -z "$1" ]; then
     echo "ERROR: No run number provided."
-    echo "Usage: sbatch fv_cut_AmBe.sh <RUN_NUMBER>"
+    echo "Usage: sbatch fv_cut_NiCf.sh <RUN_NUMBER>"
     exit 1
 fi
 
 TARGET_RUN=$1
 
 # ------------------------------------------------
-# Determine sample type
+# Check run number
 # ------------------------------------------------
 
-if [ "$TARGET_RUN" -eq 2384 ]; then
+case "$TARGET_RUN" in
+    2437|2482|2494|2504|2507|2508)
+        ;;
+    *)
+        echo "ERROR: Unsupported NiCf run: ${TARGET_RUN}"
+        echo "Allowed runs: 2437 2482 2494 2504 2507 2508"
+        exit 1
+        ;;
+esac
 
-    BKG_FLAG="--bkg"
-    SAMPLE_TYPE="BACKGROUND"
+# ------------------------------------------------
+# NiCf is always BACKGROUND
+# ------------------------------------------------
 
-elif [[ "$TARGET_RUN" -eq 2387 || "$TARGET_RUN" -eq 2388 || \
-        "$TARGET_RUN" -eq 2389 || "$TARGET_RUN" -eq 2390 ]]; then
+BKG_FLAG="--bkg"
+SAMPLE_TYPE="BACKGROUND"
 
-    BKG_FLAG=""
-    SAMPLE_TYPE="SIGNAL"
+# ------------------------------------------------
+# Check input merged ROOT file
+# ------------------------------------------------
 
-else
-    echo "ERROR: Unsupported AmBe run: ${TARGET_RUN}"
+INPUT_FILE="/scratch/elena/9Li/filtered_root/NiCf_bkg/WCTE_merged_production_R${TARGET_RUN}_bkg.root"
+
+if [ ! -f "$INPUT_FILE" ]; then
+    echo "ERROR: Input ROOT file does not exist:"
+    echo "$INPUT_FILE"
     exit 1
 fi
-
-echo "==============================================================="
-echo "Starting Merge and FV Cut Selection"
-echo "Run:         ${TARGET_RUN}"
-echo "Sample type: ${SAMPLE_TYPE}"
-echo "Time:        $(date)"
-echo "==============================================================="
 
 # ------------------------------------------------
 # Run merge + FV selection
 # ------------------------------------------------
+
+echo "==============================================================="
+echo "Starting Merge and FV Cut Selection [NiCf]"
+echo "==============================================================="
+echo "Run:         ${TARGET_RUN}"
+echo "Sample type: ${SAMPLE_TYPE}"
+echo "Input file:  ${INPUT_FILE}"
+echo "Time:        $(date)"
+echo "==============================================================="
 
 python3 "$SCRIPT" \
     --run "$TARGET_RUN" \

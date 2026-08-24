@@ -23,25 +23,69 @@ CHUNK_SIZE=25000
 SCRIPT=/scratch/elena/9Li/scripts/load_and_sliding_windows.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-# Configuración única para AmBe (Run 2384)
-TARGET_RUN=2384
-TARGET_PATH="/scratch/elena/9Li/filtered_root/AmBe_bkg"
-TARGET_CHUNK=${TASK_ID}
+# Configuración para todos los runs de AmBe (2384=bkg run, 2387, 2388, 2389 and 2390 a signal runs)
+# ------------------------------------------------
+# Get run number from PIPELINE_v3_AmBe.sh
+# ------------------------------------------------
 
-# Directorio de salida dedicado para el Run 2384
-OUTDIR=/scratch/elena/9Li/results/run${TARGET_RUN}/processed
-mkdir -p $OUTDIR
+if [ -z "$1" ]; then
+    echo "ERROR: No run number provided."
+    exit 1
+fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Processing AmBe Run=${TARGET_RUN} Chunk=${TARGET_CHUNK} Path=${TARGET_PATH}"
+TARGET_RUN=$1
+TARGET_CHUNK=${SLURM_ARRAY_TASK_ID}
 
-# Forzamos la bandera --bkg para que lea el archivo WCTE_merged_production_R2384_bkg.root
+# ------------------------------------------------
+# Determine sample type and input path
+# ------------------------------------------------
+
+if [ "$TARGET_RUN" -eq 2384 ]; then
+
+    # AmBe background run
+    TARGET_PATH="/scratch/elena/9Li/filtered_root/AmBe_bkg"
+    BKG_FLAG="--bkg"
+    SAMPLE_TYPE="BKG"
+
+elif [[ "$TARGET_RUN" -eq 2387 || "$TARGET_RUN" -eq 2388 || \
+        "$TARGET_RUN" -eq 2389 || "$TARGET_RUN" -eq 2390 ]]; then
+
+    # AmBe signal runs
+    TARGET_PATH="/scratch/elena/9Li/filtered_root/AmBe_sig"
+    BKG_FLAG=""
+    SAMPLE_TYPE="SIGNAL"
+
+else
+    echo "ERROR: Unsupported AmBe run: ${TARGET_RUN}"
+    exit 1
+fi
+
+# ------------------------------------------------
+# Output directory
+# ------------------------------------------------
+
+OUTDIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
+mkdir -p "$OUTDIR"
+
+echo "================================================================"
+echo "Processing AmBe ${SAMPLE_TYPE}"
+echo "Run:       ${TARGET_RUN}"
+echo "Chunk:     ${TARGET_CHUNK}"
+echo "Path:      ${TARGET_PATH}"
+echo "Outdir:    ${OUTDIR}"
+echo "================================================================"
+
+# ------------------------------------------------
+# Run load_and_sliding_windows.py
+# ------------------------------------------------
+
 python3 $SCRIPT \
     --run $TARGET_RUN \
     --chunk-id $TARGET_CHUNK \
     --chunk-size $CHUNK_SIZE \
     --outdir $OUTDIR \
     --base-path $TARGET_PATH \
-    --bkg \
+    $BKG_FLAG \
     --verbose
 
 echo "Task finished successfully: run=${TARGET_RUN} chunk=${TARGET_CHUNK}"

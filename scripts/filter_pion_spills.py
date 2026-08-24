@@ -15,7 +15,15 @@ def parse_args():
 def main():
     args = parse_args()
     
-    momentum_dir = "p_340" if args.run in [1846, 1848] else "p_260"
+    if args.run in [1846, 1848]:
+        momentum_dir = "p_340"
+    elif args.run in [1903, 1905, 1907, 1909]:
+        momentum_dir = "p_370"
+    elif args.run in [1928, 1930, 1932, 1934, 1935, 1936, 1937, 1938, 1939, 1941]:
+        momentum_dir = "p_260"
+    else:
+        raise ValueError(f"Unknown run number: {args.run}")
+    
     input_file = os.path.join(args.in_base, momentum_dir, f"WCTE_merged_production_R{args.run}.root")
     output_dir = os.path.join(args.out_base, momentum_dir)
     os.makedirs(output_dir, exist_ok=True)

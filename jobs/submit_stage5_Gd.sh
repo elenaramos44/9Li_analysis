@@ -23,7 +23,7 @@ SAMPLE_FLAG="${EXTRA_ARGS}"
 echo "Submitting Stage 5 array for 6 Gd runs (array=0-5)..."
 
 JOB_OUT=$(sbatch \
-    --array=0-5 \
+    --array=0-6 \
     --export=ALL,EXTRA_ARGS="${SAMPLE_FLAG}" \
     ${JOBS_DIR}/fv_cut_Gd.sh)
 

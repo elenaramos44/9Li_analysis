@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=1:30:00
-#SBATCH --array=0-11%4           #4 runs processing at the same time
+#SBATCH --array=0-3           #4 runs processing at the same time
 
 mkdir -p /scratch/elena/9Li/filtered_root/log/%A
 
@@ -29,7 +29,9 @@ SCRIPT=/scratch/elena/9Li/scripts/filter_pion_spills.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
 
-RUNS=(1846 1848 1928 1930 1932 1934 1935 1936 1937 1938 1939 1941)
+#RUNS=(1846 1848 1928 1930 1932 1934 1935 1936 1937 1938 1939 1941)
+RUNS=(1903 1905 1907 1909)
+
 
 TARGET_RUN=${RUNS[$TASK_ID]}
 

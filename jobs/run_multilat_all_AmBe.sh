@@ -10,7 +10,7 @@
 #SBATCH --mem=16G
 #SBATCH --time=04:00:00
 
-echo "Setting environment for multilateration (AmBe Run 2384)"
+echo "Setting environment for multilateration"
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
@@ -29,32 +29,74 @@ export ROOT_INCLUDE_PATH=$BONSAIDIR/bonsai:/scratch/elena/wcsim-install/include/
 echo "Environment ready (multilateration)"
 
 SCRIPT=/scratch/elena/9Li/scripts/multilat_vertex_reconstruction.py
-TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-# Run 2384 fijo
-TARGET_RUN=2384
-TARGET_CHUNK=${TASK_ID}
+# ------------------------------------------------
+# Get run number
+# ------------------------------------------------
 
-IN_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
-OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
+if [ -z "$1" ]; then
+    echo "ERROR: No run number provided."
+    exit 1
+fi
 
-# Nombre exacto generado por load_and_sliding_windows.py con la bandera --bkg
-INPUT_FILE="${IN_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}_BKG.pkl"
+TARGET_RUN=$1
+TARGET_CHUNK=${SLURM_ARRAY_TASK_ID}
 
-mkdir -p $OUT_DIR
+# ------------------------------------------------
+# Determine sample type
+# ------------------------------------------------
+
+if [ "$TARGET_RUN" -eq 2384 ]; then
+
+    SAMPLE_TYPE="BKG"
+    IN_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
+    OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
+    INPUT_FILE="${IN_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}_BKG.pkl"
+    BKG_FLAG="--bkg"
+
+elif [[ "$TARGET_RUN" -eq 2387 || "$TARGET_RUN" -eq 2388 || \
+        "$TARGET_RUN" -eq 2389 || "$TARGET_RUN" -eq 2390 ]]; then
+
+    SAMPLE_TYPE="SIGNAL"
+    IN_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
+    OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
+    INPUT_FILE="${IN_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}.pkl"
+    BKG_FLAG=""
+
+else
+    echo "ERROR: Unsupported AmBe run: ${TARGET_RUN}"
+    exit 1
+fi
+
+mkdir -p "$OUT_DIR"
 
 echo "--------------------------------------------------------"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task: $TASK_ID"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task: $SLURM_ARRAY_TASK_ID"
 echo "Processing Run: $TARGET_RUN"
+echo "Sample Type: $SAMPLE_TYPE"
 echo "Processing Chunk: $TARGET_CHUNK"
 echo "Input PKL: $INPUT_FILE"
 echo "Output Dir: $OUT_DIR"
 echo "--------------------------------------------------------"
 
-python3 $SCRIPT \
-    --pkl $INPUT_FILE \
-    --outdir $OUT_DIR \
-    --bkg \
+# ------------------------------------------------
+# Check input PKL
+# ------------------------------------------------
+
+if [ ! -f "$INPUT_FILE" ]; then
+    echo "ERROR: Input PKL does not exist:"
+    echo "$INPUT_FILE"
+    exit 1
+fi
+
+# ------------------------------------------------
+# Run multilateration
+# ------------------------------------------------
+
+python3 "$SCRIPT" \
+    --pkl "$INPUT_FILE" \
+    --outdir "$OUT_DIR" \
+    $BKG_FLAG \
     --verbose
 
 echo "Finished multilateration for chunk ${TARGET_CHUNK} of run ${TARGET_RUN}"

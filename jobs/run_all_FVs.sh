@@ -3,7 +3,7 @@
 # Automatización de Stage 5 para volúmenes fiduciales (FV_2, FV_3, FV_4)
 # ==============================================================================
 
-SUBMIT_SCRIPT="submit_stage5.sh"
+SUBMIT_SCRIPT="submit_stage5_Gd.sh"
 
 echo "======================================================================"
 echo "Lanzando Stage 5 para nuevos Volúmenes Fiduciales (Signal y Background)"
