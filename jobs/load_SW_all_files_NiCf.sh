@@ -20,7 +20,7 @@ export Geant4_DIR=/scratch/elena/geant4.10.03.p03-install/lib64/Geant4-10.3.3/Ge
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scratch/elena/wcsim-install/lib
 
 CHUNK_SIZE=25000
-SCRIPT=/scratch/elena/9Li/scripts/load_and_sliding_windows.py
+SCRIPT=/scratch/elena/9Li/scripts/load_and_sliding_windows_NiCf.py
 
 TARGET_RUN=$1
 TARGET_CHUNK=${SLURM_ARRAY_TASK_ID}
@@ -50,5 +50,4 @@ python3 "$SCRIPT" \
     --chunk-size "$CHUNK_SIZE" \
     --outdir "$OUTDIR" \
     --base-path "$TARGET_PATH" \
-    --bkg \
     --verbose

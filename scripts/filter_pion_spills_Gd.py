@@ -18,7 +18,7 @@ def main():
     # ---------------------------------------------------------------------
     # Determinación dinámica del subdirectorio de datos según el run (Gd y estándar)
     # ---------------------------------------------------------------------
-    gd_p270_runs = [2407, 2408, 2409, 2432, 2434, 2438]
+    gd_p270_runs = [2407, 2408, 2409, 2432, 2438]
     gd_p350_runs = [2374, 2379]
     
     if args.run in gd_p270_runs:
@@ -30,7 +30,12 @@ def main():
     else:
         momentum_dir = "p_260"
 
+    # Handle special case where run 2379 is stored in /scratch/elena instead of /data/elena/data
     input_file = os.path.join(args.in_base, momentum_dir, f"WCTE_merged_production_R{args.run}.root")
+    if args.run == 2379 and not os.path.exists(input_file):
+        alt_base = "/scratch/elena"
+        input_file = os.path.join(alt_base, momentum_dir, f"WCTE_merged_production_R{args.run}.root")
+
     output_dir = os.path.join(args.out_base, momentum_dir)
     os.makedirs(output_dir, exist_ok=True)
     
@@ -72,7 +77,6 @@ def main():
         tree_windows = f_in["WCTEReadoutWindows"]
         tree_scalars = f_in["vme_analysis_scalar_results"]
         
-        # Filtrar solo las ramas que existan realmente en este ROOT específico
         available_branches = tree_windows.keys()
         branches_to_keep = [b for b in desired_branches if b in available_branches]
         
@@ -86,16 +90,14 @@ def main():
     evt_quality = (arrays_win["vme_evt_quality_bitmask"] == 0) if "vme_evt_quality_bitmask" in arrays_win.fields else True
     digi_issues = (arrays_win["vme_digi_issues_bitmask"] == 0) if "vme_digi_issues_bitmask" in arrays_win.fields else True
 
-    # 2. T5 Selection (Riguroso tanto para ficheros antiguos como nuevos de Gd)
+    # 2. T5 Selection
     if "T5_HasValidHit" in arrays_win.fields:
-        # Ficheros estándar (p_260, p_340, R2374, etc.)
         valid_hit = (arrays_win["T5_HasValidHit"] == True)
         mult_scint = (arrays_win["T5_HasMultipleScintillatorsHit"] == False)
         out_of_time = (arrays_win["T5_HasOutOfTimeWindow"] == False)
         in_time = (arrays_win["T5_HasInTimeWindow"] == True)
         particle_nr = (arrays_win["T5_particle_nr"] == 1)
     else:
-        # Ficheros nuevos de Gd (ej. R2379) usando las ramas equivalentes disponibles
         valid_hit = True
         mult_scint = True
         out_of_time = True
@@ -128,14 +130,19 @@ def main():
     tagger_cut = float(ak.to_numpy(arrays_sc["act_tagger_cut"])[0]) if "act_tagger_cut" in arrays_sc.fields else 0.0
     mask_pion_event = good_mask & mask_no_electrons & (arrays_win["vme_act_tagger"] < tagger_cut if "vme_act_tagger" in arrays_win.fields else True)
 
-    # 5. Spill-level Classification
-    pion_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][mask_pion_event]))
+    # 5. Spill-level Classification (Excluding empty/dead spills from background)
     all_spills_vec = ak.to_numpy(arrays_win["spill_counter"])
     
+    valid_beam_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][good_mask]))
+    pion_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][mask_pion_event]))
+    
     signal_window_mask = np.isin(all_spills_vec, pion_spills)
-    bkg_window_mask = ~signal_window_mask
+    
+    non_pion_beam_spills = np.setdiff1d(valid_beam_spills, pion_spills)
+    bkg_window_mask = np.isin(all_spills_vec, non_pion_beam_spills)
 
     print(f"Found {len(pion_spills)} unique spills containing true pions (without e- contamination).")
+    print(f"Found {len(non_pion_beam_spills)} unique valid non-pion beam spills for background.")
     print(f"Signal windows: {np.sum(signal_window_mask)} | Background windows: {np.sum(bkg_window_mask)}")
 
     # Chunk-based writing scheme

@@ -15,87 +15,153 @@ conda activate /scratch/elena/conda-env/wcsim-env
 
 source /scratch/elena/root-6.26.04-install/bin/thisroot.sh
 source /scratch/elena/geant4.10.03.p03-install/bin/geant4.sh
+
 export Geant4_DIR=/scratch/elena/geant4.10.03.p03-install/lib64/Geant4-10.3.3/Geant4Config.cmake
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scratch/elena/wcsim-install/lib
 
+echo "================================================================"
 echo "WCSim environment setup ready (Gd Stage 1)"
+echo "Time: $(date)"
+echo "================================================================"
 
 CHUNK_SIZE=25000
 SCRIPT=/scratch/elena/9Li/scripts/load_and_sliding_windows.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-#RUNS=(2407 2408 2409 2432 2434 2438)
-#GD_BASE_PATH="/scratch/elena/9Li/filtered_root/Gd/p_270"
-
-RUNS=(2379)
-GD_BASE_PATH="/scratch/elena/9Li/filtered_root/Gd/p_350"
-
 # ------------------------------------------------------------------------------
-# Determinar sufijo y flag para Python según la muestra
+# Global spill-aware chunk map
 # ------------------------------------------------------------------------------
-SAMPLE_SUFFIX="signal"
-SAMPLE_FLAG=""
 
-if [[ "$EXTRA_ARGS" == *"--bkg"* ]]; then
-    SAMPLE_SUFFIX="bkg"
-    SAMPLE_FLAG="--bkg"
-    echo ">> SLIDING WINDOWS (Gd): BACKGROUND MODE DETECTED <<"
-else
-    echo ">> SLIDING WINDOWS (Gd): SIGNAL MODE DETECTED <<"
+CHUNK_MAP="${CHUNK_MAP}"
+
+if [ -z "$CHUNK_MAP" ] || [ ! -f "$CHUNK_MAP" ]; then
+    echo "ERROR: CHUNK_MAP not found:"
+    echo "  $CHUNK_MAP"
+    exit 1
 fi
 
+echo "Using chunk map:"
+echo "  $CHUNK_MAP"
+echo "SLURM array task:"
+echo "  $TASK_ID"
+
 # ------------------------------------------------------------------------------
-# Cálculo DINÁMICO del número de chunks exactos por cada RUN de Gd
+# Read chunk information from the global chunk map
 # ------------------------------------------------------------------------------
-CHUNKS_PER_RUN=()
-for RUN in "${RUNS[@]}"; do
-    FILE="${GD_BASE_PATH}/WCTE_merged_production_R${RUN}_${SAMPLE_SUFFIX}.root"
-    NUM_CHUNKS=$(python3 -c "
-import uproot, math, os
-if os.path.exists('${FILE}'):
-    with uproot.open('${FILE}') as f:
-        entries = f['WCTEReadoutWindows'].num_entries
-        print(math.ceil(entries / ${CHUNK_SIZE}))
-else:
-    print(0)
-")
-    CHUNKS_PER_RUN+=($NUM_CHUNKS)
-done
 
-CURRENT_SUM=0
-TARGET_RUN=""
-TARGET_CHUNK=""
+read -r TARGET_RUN TARGET_PATH TARGET_CHUNK ENTRY_START ENTRY_STOP < <(
+python3 -c "
+import pickle
+import sys
 
-for i in "${!RUNS[@]}"; do
-    NUM_CHUNKS=${CHUNKS_PER_RUN[$i]}
-    NEXT_SUM=$((CURRENT_SUM + NUM_CHUNKS))
-    
-    if [ "$TASK_ID" -lt "$NEXT_SUM" ]; then
-        TARGET_RUN=${RUNS[$i]}
-        TARGET_CHUNK=$((TASK_ID - CURRENT_SUM))
-        break
-    fi
-    CURRENT_SUM=$NEXT_SUM
-done
+chunk_map = '$CHUNK_MAP'
+task_id = $TASK_ID
 
-if [ -z "$TARGET_RUN" ]; then
-    echo "Task ID ${TASK_ID} exceeds total required chunks for Gd. Exiting cleanly."
+with open(chunk_map, 'rb') as f:
+    chunks = pickle.load(f)
+
+if task_id >= len(chunks):
+    print('EOF EOF EOF EOF EOF')
+    sys.exit(0)
+
+chunk = chunks[task_id]
+
+print(
+    chunk['run'],
+    chunk['file_path'],
+    chunk['chunk_id'],
+    chunk['entry_start'],
+    chunk['entry_stop']
+)
+"
+)
+
+# ------------------------------------------------------------------------------
+# Check whether this task corresponds to a valid chunk
+# ------------------------------------------------------------------------------
+
+if [ "$TARGET_RUN" == "EOF" ] || [ -z "$TARGET_RUN" ]; then
+    echo "Task ID ${TASK_ID} exceeds total chunks for Gd."
+    echo "Exiting cleanly."
     exit 0
 fi
 
+echo "----------------------------------------------------------------"
+echo "Chunk information"
+echo "----------------------------------------------------------------"
+echo "Global task ID : ${TASK_ID}"
+echo "Run            : ${TARGET_RUN}"
+echo "ROOT path      : ${TARGET_PATH}"
+echo "Chunk ID       : ${TARGET_CHUNK}"
+echo "Entry start    : ${ENTRY_START}"
+echo "Entry stop     : ${ENTRY_STOP}"
+echo "Entries        : $((ENTRY_STOP - ENTRY_START))"
+echo "----------------------------------------------------------------"
+
+# ------------------------------------------------------------------------------
+# Output directory
+# ------------------------------------------------------------------------------
+
 OUTDIR=/scratch/elena/9Li/results/run${TARGET_RUN}/processed
-mkdir -p $OUTDIR
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task=${TASK_ID} -> Processing Gd Run=${TARGET_RUN} Chunk=${TARGET_CHUNK}"
+mkdir -p "$OUTDIR"
 
-# Ejecución de Python usando únicamente $SAMPLE_FLAG (evitando --is-gd)
-python3 $SCRIPT \
-    --run $TARGET_RUN \
-    --chunk-id $TARGET_CHUNK \
-    --chunk-size $CHUNK_SIZE \
-    --outdir $OUTDIR \
-    --base-path $GD_BASE_PATH \
-    $SAMPLE_FLAG \
+# ------------------------------------------------------------------------------
+# Background / signal configuration
+# ------------------------------------------------------------------------------
+
+if [ "$EXTRA_ARGS" == "--bkg" ]; then
+    echo "Sample type: GADOLINIUM BACKGROUND"
+else
+    echo "Sample type: GADOLINIUM SIGNAL"
+fi
+
+# ------------------------------------------------------------------------------
+# Run Stage 1 Python script
+# ------------------------------------------------------------------------------
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting load_and_sliding_windows.py"
+
+python3 "$SCRIPT" \
+    --run "$TARGET_RUN" \
+    --chunk-id "$TARGET_CHUNK" \
+    --chunk-size "$CHUNK_SIZE" \
+    --entry-start "$ENTRY_START" \
+    --entry-stop "$ENTRY_STOP" \
+    --outdir "$OUTDIR" \
+    --base-path "$TARGET_PATH" \
+    $EXTRA_ARGS \
     --verbose
 
-echo "Task finished successfully: Gd run=${TARGET_RUN} chunk=${TARGET_CHUNK}"
+STATUS=$?
+
+# ------------------------------------------------------------------------------
+# Check Python exit status
+# ------------------------------------------------------------------------------
+
+if [ $STATUS -ne 0 ]; then
+
+    echo "================================================================"
+    echo "ERROR: Stage 1 failed"
+    echo "================================================================"
+    echo "Global task ID : ${TASK_ID}"
+    echo "Run            : ${TARGET_RUN}"
+    echo "Chunk ID       : ${TARGET_CHUNK}"
+    echo "Entry range    : ${ENTRY_START} - ${ENTRY_STOP}"
+    echo "Exit status    : ${STATUS}"
+    echo "================================================================"
+
+    exit $STATUS
+fi
+
+echo "================================================================"
+echo "Stage 1 task completed successfully"
+echo "================================================================"
+echo "Global task ID : ${TASK_ID}"
+echo "Run            : ${TARGET_RUN}"
+echo "Chunk ID       : ${TARGET_CHUNK}"
+echo "Entry range    : ${ENTRY_START} - ${ENTRY_STOP}"
+echo "Time           : $(date)"
+echo "================================================================"
+
+exit 0

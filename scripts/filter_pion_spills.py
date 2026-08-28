@@ -108,14 +108,20 @@ def main():
     tagger_cut = float(ak.to_numpy(arrays_sc["act_tagger_cut"])[0])
     mask_pion_event = good_mask & mask_no_electrons & (arrays_win["vme_act_tagger"] < tagger_cut)
 
-    # 5. Spill-level Classification
-    pion_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][mask_pion_event]))
+    # 5. Spill-level Classification (Updated to exclude empty/untriggered spills from background)
     all_spills_vec = ak.to_numpy(arrays_win["spill_counter"])
     
+    valid_beam_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][good_mask]))
+    pion_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][mask_pion_event]))
+    
     signal_window_mask = np.isin(all_spills_vec, pion_spills)
-    bkg_window_mask = ~signal_window_mask
+    
+    # Background is now strictly valid beam spills that passed quality/coincidence checks but contain no pion
+    non_pion_beam_spills = np.setdiff1d(valid_beam_spills, pion_spills)
+    bkg_window_mask = np.isin(all_spills_vec, non_pion_beam_spills)
 
     print(f"Found {len(pion_spills)} unique spills containing true pions (without e- contamination).")
+    print(f"Found {len(non_pion_beam_spills)} unique valid non-pion beam spills for background.")
     print(f"Signal windows: {np.sum(signal_window_mask)} | Background windows: {np.sum(bkg_window_mask)}")
 
     # Chunk-based writing scheme

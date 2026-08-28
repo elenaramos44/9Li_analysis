@@ -10,7 +10,14 @@
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
 
-echo "Setting environment for multilateration (Gd)"
+echo "================================================================"
+echo "Starting Gd multilateration task"
+echo "Time: $(date)"
+echo "================================================================"
+
+# ------------------------------------------------------------------------------
+# Environment
+# ------------------------------------------------------------------------------
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
@@ -28,82 +35,180 @@ export ROOT_INCLUDE_PATH=$BONSAIDIR/bonsai:/scratch/elena/wcsim-install/include/
 
 echo "Environment ready (multilateration Gd)"
 
-SCRIPT=/scratch/elena/9Li/scripts/multilat_vertex_reconstruction.py
-TASK_ID=${SLURM_ARRAY_TASK_ID}
+# ------------------------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------------------------
+
+SCRIPT="/scratch/elena/9Li/scripts/multilat_vertex_reconstruction.py"
 RESULTS_DIR="/scratch/elena/9Li/results"
 
-# Runs de Gadolinio (6 runs)
-#RUNS=(2407 2408 2409 2432 2434 2438)
-RUNS=(2379)
+TASK_ID="${SLURM_ARRAY_TASK_ID}"
+CHUNK_MAP="${CHUNK_MAP}"
 
-# ==============================================================================
-# CÁLCULO DINÁMICO DE CHUNKS EXISTENTES EN DISCO POR RUN
-# ==============================================================================
-CHUNKS_PER_RUN=()
+# ------------------------------------------------------------------------------
+# Check CHUNK_MAP
+# ------------------------------------------------------------------------------
 
-if [[ "$EXTRA_ARGS" == *"--bkg"* ]]; then
-    echo ">> MULTILATERATION (Gd): BACKGROUND MODE DETECTED <<"
-    for RUN in "${RUNS[@]}"; do
-        NUM=$(ls ${RESULTS_DIR}/run${RUN}/processed/Li9_clusters_chunk_*_BKG.pkl 2>/dev/null | wc -l)
-        CHUNKS_PER_RUN+=($NUM)
-    done
-else
-    echo ">> MULTILATERATION (Gd): SIGNAL MODE DETECTED <<"
-    for RUNs in "${RUNS[@]}"; do
-        # Pequeño apunte: aseguramos evaluar la variable correctamente
-        :
-    done
-    for RUN in "${RUNS[@]}"; do
-        NUM=$(ls ${RESULTS_DIR}/run${RUN}/processed/Li9_clusters_chunk_*.pkl 2>/dev/null | grep -v BKG | wc -l)
-        CHUNKS_PER_RUN+=($NUM)
-    done
+if [ -z "$CHUNK_MAP" ] || [ ! -f "$CHUNK_MAP" ]; then
+    echo "ERROR: CHUNK_MAP not found."
+    echo "  CHUNK_MAP = ${CHUNK_MAP}"
+    exit 1
 fi
 
-CURRENT_SUM=0
-TARGET_RUN=""
-TARGET_CHUNK=""
+echo "Using chunk map:"
+echo "  ${CHUNK_MAP}"
 
-for i in "${!RUNS[@]}"; do
-    NUM_CHUNKS=${CHUNKS_PER_RUN[$i]}
-    NEXT_SUM=$((CURRENT_SUM + NUM_CHUNKS))
-    
-    if [ "$TASK_ID" -lt "$NEXT_SUM" ]; then
-        TARGET_RUN=${RUNS[$i]}
-        TARGET_CHUNK=$((TASK_ID - CURRENT_SUM))
-        break
-    fi
-    CURRENT_SUM=$NEXT_SUM
-done
+echo "SLURM array task:"
+echo "  ${TASK_ID}"
 
-if [ -z "$TARGET_RUN" ]; then
-    echo "Task ID ${TASK_ID} exceeds required chunks for Gd. Exiting cleanly."
+# ------------------------------------------------------------------------------
+# Determine sample type
+# ------------------------------------------------------------------------------
+
+if [[ "$EXTRA_ARGS" == *"--bkg"* ]]; then
+    SAMPLE_TYPE="bkg"
+    echo "Sample type: GADOLINIUM BACKGROUND"
+else
+    SAMPLE_TYPE="signal"
+    echo "Sample type: GADOLINIUM SIGNAL"
+fi
+
+# ------------------------------------------------------------------------------
+# Read run and chunk information from the SAME global chunk map
+# used by Stage 1
+# ------------------------------------------------------------------------------
+
+CHUNK_INFO=$(python3 -c "
+import pickle
+import sys
+
+chunk_map = '${CHUNK_MAP}'
+task_id = ${TASK_ID}
+
+with open(chunk_map, 'rb') as f:
+    chunks = pickle.load(f)
+
+if task_id >= len(chunks):
+    print('EOF EOF')
+    sys.exit(0)
+
+chunk = chunks[task_id]
+
+print(
+    chunk['run'],
+    chunk['chunk_id']
+)
+")
+
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+    echo "ERROR: Failed to read chunk map."
+    exit $STATUS
+fi
+
+read -r TARGET_RUN TARGET_CHUNK <<< "$CHUNK_INFO"
+
+# ------------------------------------------------------------------------------
+# Check whether this task corresponds to a valid chunk
+# ------------------------------------------------------------------------------
+
+if [ "$TARGET_RUN" == "EOF" ] || [ -z "$TARGET_RUN" ]; then
+    echo "Task ID ${TASK_ID} exceeds total chunks in Gd chunk map."
+    echo "Exiting cleanly."
     exit 0
 fi
 
-IN_DIR="${RESULTS_DIR}/run${TARGET_RUN}/processed"
+# ------------------------------------------------------------------------------
+# Determine input PKL
+# ------------------------------------------------------------------------------
+
 OUT_DIR="${RESULTS_DIR}/run${TARGET_RUN}/processed"
 
-if [[ "$EXTRA_ARGS" == *"--bkg"* ]]; then
-    INPUT_FILE="${IN_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}_BKG.pkl"
+if [ "$SAMPLE_TYPE" == "bkg" ]; then
+    INPUT_FILE="${OUT_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}_BKG.pkl"
 else
-    INPUT_FILE="${IN_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}.pkl"
+    INPUT_FILE="${OUT_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}.pkl"
 fi
 
-mkdir -p $OUT_DIR
+# ------------------------------------------------------------------------------
+# Check input PKL
+# ------------------------------------------------------------------------------
 
-echo "--------------------------------------------------------"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task Gd: $TASK_ID"
-echo "Processing Run: $TARGET_RUN"
-echo "Processing Chunk: $TARGET_CHUNK"
-echo "Input PKL: $INPUT_FILE"
-echo "Output Dir: $OUT_DIR"
-echo "--------------------------------------------------------"
+if [ ! -f "$INPUT_FILE" ]; then
+    echo "================================================================"
+    echo "ERROR: Expected Stage 1 PKL does not exist."
+    echo "================================================================"
+    echo "Global task ID : ${TASK_ID}"
+    echo "Run            : ${TARGET_RUN}"
+    echo "Chunk ID       : ${TARGET_CHUNK}"
+    echo "Expected PKL   : ${INPUT_FILE}"
+    echo "================================================================"
 
-# Pasamos $EXTRA_ARGS directamente (que es '--bkg' o vacío)
-python3 $SCRIPT \
-    --pkl $INPUT_FILE \
-    --outdir $OUT_DIR \
+    exit 1
+fi
+
+# ------------------------------------------------------------------------------
+# Print chunk information
+# ------------------------------------------------------------------------------
+
+echo "----------------------------------------------------------------"
+echo "Chunk information"
+echo "----------------------------------------------------------------"
+echo "Global task ID : ${TASK_ID}"
+echo "Run            : ${TARGET_RUN}"
+echo "Chunk ID       : ${TARGET_CHUNK}"
+echo "Input PKL      : ${INPUT_FILE}"
+echo "Output Dir     : ${OUT_DIR}"
+echo "----------------------------------------------------------------"
+
+mkdir -p "$OUT_DIR"
+
+# ------------------------------------------------------------------------------
+# Run multilateration
+# ------------------------------------------------------------------------------
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting multilateration..."
+
+python3 "$SCRIPT" \
+    --pkl "$INPUT_FILE" \
+    --outdir "$OUT_DIR" \
     $EXTRA_ARGS \
     --verbose
 
-echo "Finished chunk ${TARGET_CHUNK} for run ${TARGET_RUN}"
+STATUS=$?
+
+# ------------------------------------------------------------------------------
+# Check Python exit status
+# ------------------------------------------------------------------------------
+
+if [ $STATUS -ne 0 ]; then
+
+    echo "================================================================"
+    echo "ERROR: Multilateration failed"
+    echo "================================================================"
+    echo "Global task ID : ${TASK_ID}"
+    echo "Run            : ${TARGET_RUN}"
+    echo "Chunk ID       : ${TARGET_CHUNK}"
+    echo "Input PKL      : ${INPUT_FILE}"
+    echo "Exit status    : ${STATUS}"
+    echo "================================================================"
+
+    exit $STATUS
+fi
+
+# ------------------------------------------------------------------------------
+# Successful completion
+# ------------------------------------------------------------------------------
+
+echo "================================================================"
+echo "Stage 2 task completed successfully"
+echo "================================================================"
+echo "Global task ID : ${TASK_ID}"
+echo "Run            : ${TARGET_RUN}"
+echo "Chunk ID       : ${TARGET_CHUNK}"
+echo "Input PKL      : ${INPUT_FILE}"
+echo "Time           : $(date)"
+echo "================================================================"
+
+exit 0

@@ -10,7 +10,6 @@
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00
 
-
 echo "Setting environment for multilateration"
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
@@ -30,69 +29,179 @@ export ROOT_INCLUDE_PATH=$BONSAIDIR/bonsai:/scratch/elena/wcsim-install/include/
 echo "Environment ready (multilateration)"
 
 
+# ---------------------------------------------------------------
+# Multilateration script
+# ---------------------------------------------------------------
+
 SCRIPT=/scratch/elena/9Li/scripts/multilat_vertex_reconstruction.py
+
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
+BASE_DIR="/scratch/elena/9Li"
+CHUNK_MAP_DIR="$BASE_DIR/chunk_maps"
 
-# ==============================================================================
-# SELECCIÓN DINÁMICA DE CHUNKS SEGÚN EXTRA_ARGS
-# ==============================================================================
+
+# ---------------------------------------------------------------
+# Select correct chunk map
+# ---------------------------------------------------------------
+
 if [[ "$EXTRA_ARGS" == "--bkg" ]]; then
-    echo ">> MULTILATERATION: BACKGROUND MODE DETECTED <<"
-    CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16)
+
+    SAMPLE_NAME="BACKGROUND"
+    CHUNK_MAP="$CHUNK_MAP_DIR/bkg_chunks.pkl"
+
 else
-    echo ">> MULTILATERATION: SIGNAL MODE DETECTED <<"
-    CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33)
+
+    SAMPLE_NAME="SIGNAL"
+    CHUNK_MAP="$CHUNK_MAP_DIR/signal_chunks.pkl"
+
 fi
 
-CURRENT_SUM=0
-TARGET_RUN=""
-TARGET_CHUNK=""
 
-for i in "${!RUNS[@]}"; do
-    NUM_CHUNKS=${CHUNKS_PER_RUN[$i]}
-    NEXT_SUM=$((CURRENT_SUM + NUM_CHUNKS))
-    
-    if [ "$TASK_ID" -lt "$NEXT_SUM" ]; then
-        TARGET_RUN=${RUNS[$i]}
-        TARGET_CHUNK=$((TASK_ID - CURRENT_SUM))
-        break
-    fi
-    CURRENT_SUM=$NEXT_SUM
-done
+# ---------------------------------------------------------------
+# Check chunk map
+# ---------------------------------------------------------------
 
-if [ -z "$TARGET_RUN" ]; then
-    echo "Task ID ${TASK_ID} exceeds required chunks. Exiting cleanly."
+if [ ! -f "$CHUNK_MAP" ]; then
+
+    echo "ERROR: Chunk map does not exist:"
+    echo "$CHUNK_MAP"
+    exit 1
+
+fi
+
+
+# ---------------------------------------------------------------
+# Retrieve exact task from global spill-aware chunk map
+# ---------------------------------------------------------------
+
+read -r TARGET_RUN TARGET_MOMENTUM TARGET_CHUNK TARGET_START TARGET_STOP < <(
+python3 - "$CHUNK_MAP" "$TASK_ID" <<'PY'
+import sys
+import pickle
+
+chunk_map = sys.argv[1]
+task_id = int(sys.argv[2])
+
+with open(chunk_map, "rb") as f:
+    chunks = pickle.load(f)
+
+if task_id < 0 or task_id >= len(chunks):
+    print("EOF EOF EOF EOF EOF")
+    sys.exit(0)
+
+chunk = chunks[task_id]
+
+print(
+    chunk["run"],
+    chunk["momentum_dir"],
+    chunk["chunk_id"],
+    chunk["entry_start"],
+    chunk["entry_stop"]
+)
+PY
+)
+
+
+# ---------------------------------------------------------------
+# Check for invalid task
+# ---------------------------------------------------------------
+
+if [ "$TARGET_RUN" == "EOF" ] || [ -z "$TARGET_RUN" ]; then
+
+    echo "Task ID ${TASK_ID} exceeds total chunks."
+    echo "Exiting cleanly."
+
     exit 0
+
 fi
+
+
+# ---------------------------------------------------------------
+# Input/output directories
+# ---------------------------------------------------------------
 
 IN_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
-OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed" # Guardar todo en processed para simplificar rutas
-#OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/test_new_geo"
+OUT_DIR="/scratch/elena/9Li/results/run${TARGET_RUN}/processed"
 
-# Definimos el nombre del archivo de entrada según la muestra procesada
+
+# ---------------------------------------------------------------
+# Select Stage 1 output PKL
+# ---------------------------------------------------------------
+
 if [[ "$EXTRA_ARGS" == "--bkg" ]]; then
+
     INPUT_FILE="${IN_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}_BKG.pkl"
+
 else
+
     INPUT_FILE="${IN_DIR}/Li9_clusters_chunk_${TARGET_CHUNK}.pkl"
+
 fi
 
-mkdir -p $OUT_DIR
+
+# ---------------------------------------------------------------
+# Check that Stage 1 output exists
+# ---------------------------------------------------------------
+
+if [ ! -f "$INPUT_FILE" ]; then
+
+    echo "ERROR: Expected Stage 1 PKL does not exist:"
+    echo "$INPUT_FILE"
+    echo ""
+    echo "Run      : $TARGET_RUN"
+    echo "Momentum : $TARGET_MOMENTUM"
+    echo "Chunk    : $TARGET_CHUNK"
+    exit 1
+
+fi
+
+
+mkdir -p "$OUT_DIR"
+
+
+# ---------------------------------------------------------------
+# Print task information
+# ---------------------------------------------------------------
 
 echo "--------------------------------------------------------"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task: $TASK_ID"
-echo "Processing Run: $TARGET_RUN"
-echo "Processing Chunk: $TARGET_CHUNK"
+echo "Sample: $SAMPLE_NAME"
+echo "Run: $TARGET_RUN"
+echo "Momentum: $TARGET_MOMENTUM"
+echo "Global Chunk: $TARGET_CHUNK"
+echo "Entry range: $TARGET_START - $TARGET_STOP"
 echo "Input PKL: $INPUT_FILE"
 echo "Output Dir: $OUT_DIR"
 echo "--------------------------------------------------------"
 
-# Añadimos $EXTRA_ARGS al script de Python
-python3 $SCRIPT \
-    --pkl $INPUT_FILE \
-    --outdir $OUT_DIR \
+
+# ---------------------------------------------------------------
+# Run multilateration
+# ---------------------------------------------------------------
+
+python3 "$SCRIPT" \
+    --pkl "$INPUT_FILE" \
+    --outdir "$OUT_DIR" \
     $EXTRA_ARGS \
     --verbose
 
-echo "Finished chunk ${TARGET_CHUNK} for run ${TARGET_RUN}"
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+
+    echo ""
+    echo "ERROR: Multilateration failed."
+    echo "Run=${TARGET_RUN}"
+    echo "Momentum=${TARGET_MOMENTUM}"
+    echo "Chunk=${TARGET_CHUNK}"
+    exit $STATUS
+
+fi
+
+
+echo ""
+echo "Finished global chunk ${TARGET_CHUNK}"
+echo "Run ${TARGET_RUN}"
+echo "Momentum ${TARGET_MOMENTUM}"
+echo "========================================================"

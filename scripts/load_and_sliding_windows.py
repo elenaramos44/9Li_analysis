@@ -11,6 +11,8 @@ def parse_args():
     parser.add_argument("--run", type=int, required=True)
     parser.add_argument("--chunk-id", type=int, required=True)
     parser.add_argument("--chunk-size", type=int, default=25000)
+    parser.add_argument("--entry-start", type=int, required=True)
+    parser.add_argument("--entry-stop", type=int, required=True)
     parser.add_argument("--outdir", type=str, required=True)
     parser.add_argument("--base-path", type=str, required=True)
     # --- MODIFICACIÓN: Añadida bandera booleana para discriminar la muestra ---
@@ -100,10 +102,14 @@ def main():
         "hit_pmt_charges"
     ]
     
-    start_entry = chunk_id * chunk_size
-    stop_entry = start_entry + chunk_size
+    #start_entry = chunk_id * chunk_size    #old fixed version!
+    #stop_entry = start_entry + chunk_size
+
+    start_entry = args.entry_start
+    stop_entry = args.entry_stop
 
     arrays = tree.arrays(branches, entry_start=start_entry, entry_stop=stop_entry, library="ak")
+
 
     if verbose:
         print(f"Loaded {len(arrays.window_time)} readout windows")

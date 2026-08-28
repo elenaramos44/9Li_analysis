@@ -6,68 +6,162 @@
 #SBATCH --partition=general
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4         
-#SBATCH --mem=8G                 
-#SBATCH --time=2:00:00           
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8G
+#SBATCH --time=2:00:00
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
 
 source /scratch/elena/root-6.26.04-install/bin/thisroot.sh
 source /scratch/elena/geant4.10.03.p03-install/bin/geant4.sh
+
 export Geant4_DIR=/scratch/elena/geant4.10.03.p03-install/lib64/Geant4-10.3.3/Geant4Config.cmake
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scratch/elena/wcsim-install/lib
 
 echo "WCSim environment setup ready"
 
-# ==============================================================================
-# CAPTURE EXTRA_ARGS FROM PIPELINE.SH
-# ==============================================================================
-EXTRA_ARGS=${1:-$EXTRA_ARGS}
+
+# ---------------------------------------------------------------
+# Refinement script
+# ---------------------------------------------------------------
 
 SCRIPT=/scratch/elena/9Li/scripts/refinement_all.py
+
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-RUNS=(1928 1930 1932 1934 1935 1936 1937 1938 1939 1941 1846 1848)
+BASE_DIR="/scratch/elena/9Li"
+CHUNK_MAP_DIR="$BASE_DIR/chunk_maps"
 
-# ==============================================================================
-# SELECCIÓN DINÁMICA DE CHUNKS SEGÚN EXTRA_ARGS
-# ==============================================================================
+
+# ---------------------------------------------------------------
+# Select correct chunk map
+# ---------------------------------------------------------------
+
+EXTRA_ARGS=${1:-$EXTRA_ARGS}
+
 if [[ "$EXTRA_ARGS" == "--bkg" ]]; then
-    echo ">> REFINEMENT: BACKGROUND MODE DETECTED <<"
-    CHUNKS_PER_RUN=(55 80 64 48 47 39 52 31 52 63 18 16)
+
+    SAMPLE_NAME="BACKGROUND"
+    CHUNK_MAP="$CHUNK_MAP_DIR/bkg_chunks.pkl"
+
 else
-    echo ">> REFINEMENT: SIGNAL MODE DETECTED <<"
-    CHUNKS_PER_RUN=(24 13 34 19 22 20 27 13 21 31 33 33)
+
+    SAMPLE_NAME="SIGNAL"
+    CHUNK_MAP="$CHUNK_MAP_DIR/signal_chunks.pkl"
+
 fi
 
-CURRENT_SUM=0
-TARGET_RUN=""
-TARGET_CHUNK=""
 
-for i in "${!RUNS[@]}"; do
-    NUM_CHUNKS=${CHUNKS_PER_RUN[$i]}
-    NEXT_SUM=$((CURRENT_SUM + NUM_CHUNKS))
-    
-    if [ "$TASK_ID" -lt "$NEXT_SUM" ]; then
-        TARGET_RUN=${RUNS[$i]}
-        TARGET_CHUNK=$((TASK_ID - CURRENT_SUM))
-        break
-    fi
-    CURRENT_SUM=$NEXT_SUM
-done
+# ---------------------------------------------------------------
+# Check chunk map
+# ---------------------------------------------------------------
 
-if [ -z "$TARGET_RUN" ]; then
-    echo "Task ID ${TASK_ID} exceeds required chunks. Exiting cleanly."
+if [ ! -f "$CHUNK_MAP" ]; then
+
+    echo "ERROR: Chunk map does not exist:"
+    echo "$CHUNK_MAP"
+    exit 1
+
+fi
+
+
+# ---------------------------------------------------------------
+# Retrieve exact task from global spill-aware chunk map
+# ---------------------------------------------------------------
+
+read -r TARGET_RUN TARGET_MOMENTUM TARGET_CHUNK TARGET_START TARGET_STOP < <(
+python3 - "$CHUNK_MAP" "$TASK_ID" <<'PY'
+import sys
+import pickle
+
+chunk_map = sys.argv[1]
+task_id = int(sys.argv[2])
+
+with open(chunk_map, "rb") as f:
+    chunks = pickle.load(f)
+
+if task_id < 0 or task_id >= len(chunks):
+    print("EOF EOF EOF EOF EOF")
+    sys.exit(0)
+
+chunk = chunks[task_id]
+
+print(
+    chunk["run"],
+    chunk["momentum_dir"],
+    chunk["chunk_id"],
+    chunk["entry_start"],
+    chunk["entry_stop"]
+)
+PY
+)
+
+
+# ---------------------------------------------------------------
+# Check for invalid task
+# ---------------------------------------------------------------
+
+if [ "$TARGET_RUN" == "EOF" ] || [ -z "$TARGET_RUN" ]; then
+
+    echo "Task ID ${TASK_ID} exceeds total chunks."
+    echo "Exiting cleanly."
+
     exit 0
+
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Global Task=${TASK_ID} -> Starting Refinement for Run=${TARGET_RUN} Chunk=${TARGET_CHUNK}"
 
-# Añadimos $EXTRA_ARGS al final del comando de Python
-python3 $SCRIPT \
-    --run $TARGET_RUN \
-    --chunk-id $TARGET_CHUNK \
+# ---------------------------------------------------------------
+# Print task information
+# ---------------------------------------------------------------
+
+echo "==============================================================="
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Stage 4 refinement"
+echo "==============================================================="
+echo "Global Task : $TASK_ID"
+echo "Sample      : $SAMPLE_NAME"
+echo "Run         : $TARGET_RUN"
+echo "Momentum    : $TARGET_MOMENTUM"
+echo "Chunk       : $TARGET_CHUNK"
+echo "Entry start : $TARGET_START"
+echo "Entry stop  : $TARGET_STOP"
+echo "==============================================================="
+
+
+# ---------------------------------------------------------------
+# Run refinement
+# ---------------------------------------------------------------
+
+python3 "$SCRIPT" \
+    --run "$TARGET_RUN" \
+    --chunk-id "$TARGET_CHUNK" \
     $EXTRA_ARGS
 
-echo "Task finished successfully: run=${TARGET_RUN} chunk=${TARGET_CHUNK}"
+STATUS=$?
+
+
+# ---------------------------------------------------------------
+# Check refinement status
+# ---------------------------------------------------------------
+
+if [ $STATUS -ne 0 ]; then
+
+    echo ""
+    echo "ERROR: Refinement failed."
+    echo "Run=${TARGET_RUN}"
+    echo "Momentum=${TARGET_MOMENTUM}"
+    echo "Chunk=${TARGET_CHUNK}"
+
+    exit $STATUS
+
+fi
+
+
+echo ""
+echo "Task finished successfully:"
+echo "  Sample   = ${SAMPLE_NAME}"
+echo "  Run      = ${TARGET_RUN}"
+echo "  Momentum = ${TARGET_MOMENTUM}"
+echo "  Chunk    = ${TARGET_CHUNK}"
+echo "==============================================================="

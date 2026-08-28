@@ -2,7 +2,6 @@ import os
 import glob
 import argparse
 import pandas as pd
-import numpy as np
 
 
 def main():
@@ -92,8 +91,6 @@ def main():
         args.fvtag,
     )
 
-    os.makedirs(output_dir, exist_ok=True)
-
     # ==========================================================
     # Input files
     # ==========================================================
@@ -126,20 +123,23 @@ def main():
 
     refined_files = sorted(glob.glob(search_pattern))
 
+    # In SIGNAL mode, explicitly exclude background files.
     if not args.bkg:
         refined_files = [
             f for f in refined_files
             if not f.endswith("_BKG.pkl")
         ]
 
+    # ----------------------------------------------------------
+    # Check that refined files exist
+    # ----------------------------------------------------------
+
     if len(refined_files) == 0:
 
-        print(
+        raise RuntimeError(
             f"No refined chunk files found for "
             f"Run {args.run} ({sample_label})"
         )
-
-        return
 
     print(
         f"Found {len(refined_files)} refined chunk files "
@@ -147,13 +147,78 @@ def main():
     )
 
     # ==========================================================
-    # Merge chunks
+    # Read and validate ALL refined chunks
+    #
+    # IMPORTANT:
+    # Nothing is saved before every input file has been
+    # successfully read and validated.
     # ==========================================================
 
-    dfs = [
-        pd.read_pickle(f)
-        for f in refined_files
+    dfs = []
+
+    required_columns = [
+        "v_x_fine",
+        "v_y_fine",
+        "v_z_fine",
     ]
+
+    for filename in refined_files:
+
+        print(f"Reading: {filename}")
+
+        try:
+
+            df = pd.read_pickle(filename)
+
+        except Exception as exc:
+
+            raise RuntimeError(
+                f"FAILED to read refined chunk:\n"
+                f"  {filename}\n"
+                f"Reason: {exc}"
+            ) from exc
+
+        # ------------------------------------------------------
+        # Check that the object is actually a DataFrame
+        # ------------------------------------------------------
+
+        if not isinstance(df, pd.DataFrame):
+
+            raise RuntimeError(
+                f"Invalid refined chunk:\n"
+                f"  {filename}\n"
+                f"Expected pandas DataFrame, "
+                f"got {type(df).__name__}"
+            )
+
+        # ------------------------------------------------------
+        # Check required FV columns
+        # ------------------------------------------------------
+
+        missing_columns = [
+            col
+            for col in required_columns
+            if col not in df.columns
+        ]
+
+        if missing_columns:
+
+            raise RuntimeError(
+                f"Invalid refined chunk:\n"
+                f"  {filename}\n"
+                f"Missing required columns: "
+                f"{', '.join(missing_columns)}"
+            )
+
+        print(
+            f"  OK: {len(df)} clusters"
+        )
+
+        dfs.append(df)
+
+    # ==========================================================
+    # Only now is it safe to merge
+    # ==========================================================
 
     df_all_refined = pd.concat(
         dfs,
@@ -161,15 +226,9 @@ def main():
     )
 
     print(
-        f"Total refined clusters loaded: "
+        f"\nTotal refined clusters loaded: "
         f"{len(df_all_refined)}"
     )
-
-    if df_all_refined.empty:
-
-        print("Merged dataframe is empty.")
-
-        return
 
     # ==========================================================
     # Statistics before FV cut
@@ -257,10 +316,18 @@ def main():
 
     print("-" * 70)
 
-    print(
-        f"Removed clusters : {dropped_clusters} "
-        f"({100*dropped_clusters/initial_clusters:.2f}%)"
-    )
+    if initial_clusters > 0:
+
+        print(
+            f"Removed clusters : {dropped_clusters} "
+            f"({100*dropped_clusters/initial_clusters:.2f}%)"
+        )
+
+    else:
+
+        print(
+            "Removed clusters : 0 (0.00%)"
+        )
 
     print(
         f"Removed spills   : {len(lost_spills)}"
@@ -270,7 +337,17 @@ def main():
 
     # ==========================================================
     # Save
+    #
+    # This is reached ONLY if:
+    #   1. All refined files were found
+    #   2. Every refined file was readable
+    #   3. Every refined file contained a DataFrame
+    #   4. Every refined file contained the FV columns
+    #   5. The merge succeeded
+    #   6. The FV selection succeeded
     # ==========================================================
+
+    os.makedirs(output_dir, exist_ok=True)
 
     output_path = os.path.join(
         output_dir,

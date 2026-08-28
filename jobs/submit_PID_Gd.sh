@@ -1,17 +1,17 @@
 #!/bin/bash
 #SBATCH --qos=regular
-#SBATCH --job-name=Skim_Gd_Li9_Pions
-#SBATCH --output=/scratch/elena/9Li/filtered_root/log/%A/run_%a.out
-#SBATCH --error=/scratch/elena/9Li/filtered_root/log/%A/run_%a.err
+#SBATCH --job-name=Skim_Li9_Pions_Gd
+#SBATCH --output=/scratch/elena/9Li/filtered_root/log_Gd/%A/run_%a.out
+#SBATCH --error=/scratch/elena/9Li/filtered_root/log_Gd/%A/run_%a.err
 #SBATCH --partition=general
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=96G
+#SBATCH --mem=48G
 #SBATCH --time=1:30:00
-#SBATCH --array=0           # 8 total tasks (0 to 7), max 4 running concurrently
+#SBATCH --array=0-6           # 7 Gd runs (índices del 0 al 6)
 
-mkdir -p /scratch/elena/9Li/filtered_root/log/%A
+mkdir -p /scratch/elena/9Li/filtered_root/log_Gd/%A
 
 source /scicomp/builds/Rocky/8.7/Common/software/Miniforge3/24.11.3-2/etc/profile.d/conda.sh
 conda activate /scratch/elena/conda-env/wcsim-env
@@ -26,27 +26,22 @@ echo "WCSim environment setup ready"
 SCRIPT=/scratch/elena/9Li/scripts/filter_pion_spills_Gd.py
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-# Only Gd runs (Gd/p_270 and Gd/p_350)
-#RUNS=(
-#    2407 2408 2409 2432 2434 2438 \
-#    2374 2379
-#)
+# Lista oficial de Gd (sin el 2434)
+RUNS=(2407 2408 2409 2432 2438 2374 2379)
 
-#TARGET_RUN=${RUNS[$TASK_ID]}
-
-TARGET_RUN=2379
+TARGET_RUN=${RUNS[$TASK_ID]}
 
 if [ -z "$TARGET_RUN" ]; then
     echo "Error: TASK_ID $TASK_ID out of bounds."
     exit 1
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Skimming Task=${TASK_ID} -> Processing Run=${TARGET_RUN}"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Gd Skimming Task=${TASK_ID} -> Processing Run=${TARGET_RUN}"
 
 # Execution block
 python3 $SCRIPT \
     --run $TARGET_RUN \
-    --in-base /scratch/elena/ \
+    --in-base /data/elena/data \
     --out-base /scratch/elena/9Li/filtered_root
 
-echo "Skimming Task finished successfully for run=${TARGET_RUN}"
+echo "Gd Skimming Task finished successfully for run=${TARGET_RUN}"
