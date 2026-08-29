@@ -86,12 +86,20 @@ if [ "$TARGET_RUN" == "EOF" ] || [ -z "$TARGET_RUN" ]; then
     exit 0
 fi
 
+BASE_PATH_FOR_PYTHON="$TARGET_PATH"
+
+if [ -f "$TARGET_PATH" ]; then
+    BASE_PATH_FOR_PYTHON="$(dirname "$TARGET_PATH")"
+fi
+
+
 echo "----------------------------------------------------------------"
 echo "Chunk information"
 echo "----------------------------------------------------------------"
 echo "Global task ID : ${TASK_ID}"
 echo "Run            : ${TARGET_RUN}"
 echo "ROOT path      : ${TARGET_PATH}"
+echo "Base path      : ${BASE_PATH_FOR_PYTHON}"
 echo "Chunk ID       : ${TARGET_CHUNK}"
 echo "Entry start    : ${ENTRY_START}"
 echo "Entry stop     : ${ENTRY_STOP}"
@@ -129,7 +137,7 @@ python3 "$SCRIPT" \
     --entry-start "$ENTRY_START" \
     --entry-stop "$ENTRY_STOP" \
     --outdir "$OUTDIR" \
-    --base-path "$TARGET_PATH" \
+    --base-path "$BASE_PATH_FOR_PYTHON" \
     $EXTRA_ARGS \
     --verbose
 
