@@ -14,13 +14,14 @@ def parse_args():
 
 def main():
     args = parse_args()
-    
+
     # ---------------------------------------------------------------------
     # Determinación dinámica del subdirectorio de datos según el run (Gd y estándar)
     # ---------------------------------------------------------------------
+    # Bloque 1: decide momentum_dir (SIN CAMBIOS, se queda igual)
     gd_p270_runs = [2407, 2408, 2409, 2432, 2438]
     gd_p350_runs = [2374, 2379]
-    
+
     if args.run in gd_p270_runs:
         momentum_dir = "Gd/p_270"
     elif args.run in gd_p350_runs:
@@ -30,18 +31,18 @@ def main():
     else:
         momentum_dir = "p_260"
 
-    # Handle special case where run 2379 is stored in /scratch/elena instead of /data/elena/data
-    input_file = os.path.join(args.in_base, momentum_dir, f"WCTE_merged_production_R{args.run}.root")
-    if args.run == 2379 and not os.path.exists(input_file):
-        alt_base = "/scratch/elena"
-        input_file = os.path.join(alt_base, momentum_dir, f"WCTE_merged_production_R{args.run}.root")
+    # Bloque 2: decide input_file (SOLO TU IF/ELSE NUEVO, sin el bloque viejo detrás)
+    if args.run == 2379:
+        input_file = os.path.join("/scratch/elena", momentum_dir, f"WCTE_merged_production_R{args.run}.root")
+    else:
+        input_file = os.path.join(args.in_base, momentum_dir, f"WCTE_merged_production_R{args.run}.root")
 
     output_dir = os.path.join(args.out_base, momentum_dir)
     os.makedirs(output_dir, exist_ok=True)
-    
+
     out_signal_path = os.path.join(output_dir, f"WCTE_merged_production_R{args.run}_signal.root")
     out_bkg_path = os.path.join(output_dir, f"WCTE_merged_production_R{args.run}_bkg.root")
-    
+
     print(f"Reading: {input_file}")
     if not os.path.exists(input_file):
         print(f"Error: Input file {input_file} does not exist.")
@@ -76,14 +77,28 @@ def main():
     with uproot.open(input_file) as f_in:
         tree_windows = f_in["WCTEReadoutWindows"]
         tree_scalars = f_in["vme_analysis_scalar_results"]
-        
+
         available_branches = tree_windows.keys()
         branches_to_keep = [b for b in desired_branches if b in available_branches]
-        
+
         arrays_win = tree_windows.arrays(branches_to_keep, library="ak")
         arrays_sc = tree_scalars.arrays(library="ak")
 
     print(f"Loaded {len(arrays_win)} readout windows with essential branches.")
+
+    # ------------------------------------------------------------------
+    # AVISO EXPLÍCITO si faltan ramas críticas, en vez de fallback mudo
+    # ------------------------------------------------------------------
+    if "T5_HasValidHit" not in arrays_win.fields:
+        print(f"*** WARNING: Run {args.run} lacks full T5 branches. "
+              f"good_mask will be WEAKER than standard runs (only particle "
+              f"multiplicity cut applied). Verify this is expected. ***")
+
+    if "act_tagger_cut" not in arrays_sc.fields:
+        print(f"*** WARNING: Run {args.run} lacks 'act_tagger_cut' in "
+              f"vme_analysis_scalar_results. Falling back to tagger_cut=0.0, "
+              f"which may reject nearly all events as non-pion. Verify this "
+              f"is expected. ***")
 
     # 1. Event Quality Checks
     data_quality = (arrays_win["window_data_quality_mask"] == 0) if "window_data_quality_mask" in arrays_win.fields else True
@@ -127,17 +142,20 @@ def main():
     eveto_cut = float(ak.to_numpy(arrays_sc["act_eveto_cut"])[0]) if "act_eveto_cut" in arrays_sc.fields else 3.92
     mask_no_electrons = (arrays_win["vme_act_eveto"] < eveto_cut) if "vme_act_eveto" in arrays_win.fields else True
 
-    tagger_cut = float(ak.to_numpy(arrays_sc["act_tagger_cut"])[0]) if "act_tagger_cut" in arrays_sc.fields else 0.0
+    # NOTA: default cambiado de 0.0 a np.inf. Un default de 0.0 rechazaba
+    # casi todos los eventos como "no-pion" si faltaba act_tagger_cut,
+    # colapsando la señal silenciosamente.
+    tagger_cut = float(ak.to_numpy(arrays_sc["act_tagger_cut"])[0]) if "act_tagger_cut" in arrays_sc.fields else np.inf
     mask_pion_event = good_mask & mask_no_electrons & (arrays_win["vme_act_tagger"] < tagger_cut if "vme_act_tagger" in arrays_win.fields else True)
 
     # 5. Spill-level Classification (Excluding empty/dead spills from background)
     all_spills_vec = ak.to_numpy(arrays_win["spill_counter"])
-    
+
     valid_beam_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][good_mask]))
     pion_spills = np.unique(ak.to_numpy(arrays_win["spill_counter"][mask_pion_event]))
-    
+
     signal_window_mask = np.isin(all_spills_vec, pion_spills)
-    
+
     non_pion_beam_spills = np.setdiff1d(valid_beam_spills, pion_spills)
     bkg_window_mask = np.isin(all_spills_vec, non_pion_beam_spills)
 
@@ -158,9 +176,9 @@ def main():
     with uproot.recreate(out_signal_path) as f_sig:
         f_sig.mktree("WCTEReadoutWindows", tree_schema)
         f_sig.mktree("vme_analysis_scalar_results", scalar_schema)
-        
+
         f_sig["vme_analysis_scalar_results"].extend({field: arrays_sc[field] for field in tree_scalars.keys()})
-        
+
         for i in range(0, num_signal, chunk_step):
             chunk = signal_arrays[i : i + chunk_step]
             f_sig["WCTEReadoutWindows"].extend({field: chunk[field] for field in branches_to_keep})
@@ -174,15 +192,15 @@ def main():
     with uproot.recreate(out_bkg_path) as f_bkg:
         f_bkg.mktree("WCTEReadoutWindows", tree_schema)
         f_bkg.mktree("vme_analysis_scalar_results", scalar_schema)
-        
+
         f_bkg["vme_analysis_scalar_results"].extend({field: arrays_sc[field] for field in tree_scalars.keys()})
-        
+
         for i in range(0, num_bkg, chunk_step):
             chunk = bkg_arrays[i : i + chunk_step]
             f_bkg["WCTEReadoutWindows"].extend({field: chunk[field] for field in branches_to_keep})
             print(f"  -> Written background entries {i} to {min(i + chunk_step, num_bkg)}")
 
     print("Sample separation completed successfully!")
-    
+
 if __name__ == "__main__":
     main()
