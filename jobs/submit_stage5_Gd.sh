@@ -123,6 +123,46 @@ if [ -z "$JOB_ID" ]; then
     exit 1
 fi
 
+# ------------------------------------------------------------------------------
+# 4. Submit Stage 6 (delayed neutron search), one task per spill-aware chunk
+#    Starts ONLY if the complete Stage 5 array finishes successfully.
+# ------------------------------------------------------------------------------
+
+CHUNK_MAP="${CHUNK_MAP}"
+
+if [ -z "$CHUNK_MAP" ] || [ ! -f "$CHUNK_MAP" ]; then
+    echo "ERROR: CHUNK_MAP not found, cannot submit Stage 6: ${CHUNK_MAP}"
+    exit 1
+fi
+
+TOTAL_CHUNKS=$(python3 -c "
+import pickle
+print(len(pickle.load(open('${CHUNK_MAP}', 'rb'))))
+")
+
+if [ -z "$TOTAL_CHUNKS" ] || [ "$TOTAL_CHUNKS" -eq 0 ]; then
+    echo "ERROR: Chunk map contains zero chunks."
+    exit 1
+fi
+
+ARRAY_RANGE_6="0-$((TOTAL_CHUNKS - 1))%10"
+
+JOB_OUT_6=$(sbatch \
+    --array="${ARRAY_RANGE_6}" \
+    --dependency="afterok:${JOB_ID}" \
+    --export=ALL,EXTRA_ARGS="${EXTRA_FLAGS}",CHUNK_MAP="${CHUNK_MAP}" \
+    "${JOBS_DIR}/run_delayed_Gd.sh")
+
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+    echo "ERROR: Failed to submit Stage 6 array for Gd!"
+    exit $STATUS
+fi
+
+JOB_ID_6=$(echo "$JOB_OUT_6" | awk '{print $4}')
+echo "Stage 6 (delayed neutron) job ID: ${JOB_ID_6}  (afterok:${JOB_ID})"
+
 echo ""
 echo "==============================================================="
 echo "Stage 5 (Gd) submitted successfully"

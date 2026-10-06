@@ -265,7 +265,7 @@ echo "Waiting for successful completion of Stage 4 Job ID: ${JOB_ID}"
 
 JOB_OUT_5=$(sbatch \
     --dependency="afterok:${JOB_ID}" \
-    --export=ALL,EXTRA_ARGS="${EXTRA_FLAGS}" \
+    --export=ALL,EXTRA_ARGS="${EXTRA_FLAGS}",CHUNK_MAP="${CHUNK_MAP}" \
     "${JOBS_DIR}/submit_stage5_Gd.sh")
 
 STATUS=$?
