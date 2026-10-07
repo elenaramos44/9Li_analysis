@@ -722,6 +722,7 @@ def main():
 
     delayed_candidates_output = []
     prompt_summary_output = []
+    diagnostic_rows = []
 
     n_prompt_total = 0
     n_prompt_too_early = 0
@@ -1009,7 +1010,41 @@ def main():
                         )
                     )
 
-                # Spatial coincidence with the prompt Li9 vertex.
+                # Spatial coincidence with the prompt Li9 vertex. Guardar SIEMPRE, pase o no el corte.
+
+                diagnostic_rows.append({
+                    "run": run,
+                    "spill_id": spill_id,
+                    "prompt_index": prompt_index,
+                    "candidate_id": candidate_id,
+                    "dR_cm": dR,
+                    "fit_success": reco["fit_success"],
+                    "delayed_nhits": candidate["nhits"],
+                    "delayed_t_rms_ns": candidate["t_rms"],
+                    "vertex_chi2_ndof": reco["vertex_chi2_ndof"],
+                    "n_hits_used": reco["n_hits_used"],
+                    "delta_t_us": (candidate["time"] - prompt_abs_ns) / 1e3,
+                    "prompt_x": prompt_x, "prompt_y": prompt_y, "prompt_z": prompt_z,
+                    "delayed_x": reco["delayed_x"],
+                    "delayed_y": reco["delayed_y"],
+                    "delayed_z": reco["delayed_z"],
+                })
+
+
+                # Quality cut on delayed vertex reconstruction
+                if not reco["fit_success"]:
+                    continue  
+
+                if not np.isfinite(reco["vertex_chi2_ndof"]):
+                    continue
+
+                if reco["vertex_chi2_ndof"] >= 3:
+                    continue
+
+                # Spatial coincidence with the prompt
+                dR = np.sqrt((reco["delayed_x"] - prompt_x) ** 2 + (reco["delayed_y"] - prompt_y) ** 2 + (reco["delayed_z"] - prompt_z) ** 2)
+
+
                 if not np.isfinite(dR):
                     continue
 
@@ -1219,6 +1254,8 @@ def main():
         prompt_summary_output
     )
 
+    df_diagnostic = pd.DataFrame(diagnostic_rows)
+
     # =========================================================================
     # Output
     # =========================================================================
@@ -1263,6 +1300,16 @@ def main():
         prompt_output_path
     )
 
+    diagnostic_output_path = os.path.join(
+        output_dir,
+        f"Delayed_Li9_diagnostic_chunk_{args.chunk_id}{bkg_tag}{args.outtag}.pkl",
+    )
+
+    df_diagnostic.to_pickle(diagnostic_output_path)
+    print(f"\nDiagnostic output: {diagnostic_output_path}")
+
+
+
     # =========================================================================
     # Summary
     # =========================================================================
@@ -1299,7 +1346,7 @@ def main():
     )
 
     print(
-        f"Valid 10-ns sliding windows      : "
+        f"Valid {args.window_ns:g} ns sliding windows      : "
         f"{n_delayed_windows}"
     )
 
