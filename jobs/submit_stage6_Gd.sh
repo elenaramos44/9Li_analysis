@@ -13,9 +13,12 @@
 
 source /scratch/elena/setup_wcsim.sh
 
-SCRIPT=/scratch/elena/9Li/scripts/delayed_neutron_search.py
+# Stage-6 script
+SCRIPT=/scratch/elena/9Li/scripts/delayed_neutron_search_v2.py
+
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
+# Select the appropriate chunk map
 if [[ "$EXTRA_ARGS" == *"--bkg"* ]]; then
     CHUNK_MAP="/scratch/elena/9Li/results/Gd_chunk_map_bkg.pkl"
 else
@@ -26,15 +29,18 @@ python3 "$SCRIPT" \
     --chunk-map "$CHUNK_MAP" \
     --chunk-id "$TASK_ID" \
     --fvtag FV_1 \
+    --time-ref li9 \
+    --li9-window-ms 500 \
+    --prompt-min-ms 100 \
+    --prompt-max-ms 500 \
     --prompt-window-ns 20 \
-    --prompt-skip-ms 20 \
-    --trigger-window-ms 480 \
+    --prompt-chi2-max 3 \
+    --iso-margin-us 0.2 \
     --gap-us 5 \
     --search-us 150 \
     --window-ns 5 \
     --nhits-min 10 \
     --nhits-max 50 \
-    --rms-cut-ns 2 \
     --dr-max-cm 20 \
     $EXTRA_ARGS \
     --verbose
