@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument("--entry-stop", type=int, required=True)
     parser.add_argument("--outdir", type=str, required=True)
     parser.add_argument("--base-path", type=str, required=True)
-    # --- MODIFICACIÓN: Añadida bandera booleana para discriminar la muestra ---
+    parser.add_argument("--death-window-ns", type=float, default=5000.0,help="Blind time after the end of a sliding window that yields a candidate (ns). Use 0 to reproduce the old behaviour.")
     parser.add_argument("--bkg", action="store_true", help="Process background root file instead of signal")
     parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
@@ -41,7 +41,7 @@ def nHitstRMSTimeWindow(
 
     cand_times = []
     cand_nhits = []
-    cand_trms  = []
+    cand_trms = []
 
     i = 0
     while i < n:
@@ -54,18 +54,20 @@ def nHitstRMSTimeWindow(
             t_rms, _ = time_rms_fun(times_in_win, t_start, window)
             t_rms = float(t_rms)
 
-            if (t_rms <= rms_cut_ns) and (count < threshold_sup):
+            accepted = (t_rms <= rms_cut_ns) and (count < threshold_sup)
+            if accepted:
                 cand_times.append(float(t_start))
                 cand_nhits.append(count)
                 cand_trms.append(t_rms)
 
-            t_skip_until = t_start + window + death_window
-            i = np.searchsorted(times, t_skip_until, side='right')
+            # Death window (PMT afterpulsing) only after an accepted candidate;
+            # rejected windows skip just the window length, as before
+            dead = death_window if accepted else 0.0
+            i = np.searchsorted(times, t_start + window + dead, side='right')
         else:
             i += 1
 
     return np.array(cand_times), np.array(cand_nhits), np.array(cand_trms)
-
 
 def main():
     args = parse_args()
@@ -147,9 +149,8 @@ def main():
     window_ns = 20
     nHits_min = 15
     nHits_max = 50
-    death_window = 0  
+    death_window = args.death_window_ns   
     rms_cut_ns = 10.0
-
     rows = []
     spill_stats = []
 
