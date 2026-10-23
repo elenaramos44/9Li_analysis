@@ -7,7 +7,8 @@ import sys
 
 # Add path to your scripts
 sys.path.append("/scratch/elena/9Li/scripts")
-import functions_multilateration
+import functions_multilaterator_wcte_version as functions_multilateration
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Multilateration vertex reconstruction with Chi2 and Quality Metrics")
@@ -21,16 +22,33 @@ def parse_args():
 
 def run_multilat_full_info(row, verbose=False):
     """
-    Runs updated multilateration and extracts chi2, ndof, t_rms and chi2_ndof.
-    """
-    times = np.array(row['hit_times_ns'])
-    mpmt_ids = np.array(row['hit_slot_ids'])
-    pmt_ids  = np.array(row['hit_position_ids'])
+    Reconstruct the initial vertex using the TimeCal multilaterator.
 
-    valid_mask = (mpmt_ids >= 0) & (pmt_ids >= 0) & np.isfinite(times)
+    All valid hits in the cluster candidate are passed to the fit.
+    No earliest-per-channel selection is applied.
+    """
+
+    times = np.asarray(row["hit_times_ns"], dtype=float)
+    mpmt_ids = np.asarray(row["hit_slot_ids"])
+    pmt_ids = np.asarray(row["hit_position_ids"])
+
+    # ------------------------------------------------------------------
+    # Remove invalid hit entries
+    # ------------------------------------------------------------------
+
+    valid_mask = (
+        (mpmt_ids >= 0)
+        & (pmt_ids >= 0)
+        & np.isfinite(times)
+    )
+
     times = times[valid_mask]
     mpmt_ids = mpmt_ids[valid_mask]
     pmt_ids = pmt_ids[valid_mask]
+
+    # ------------------------------------------------------------------
+    # Initialize output
+    # ------------------------------------------------------------------
 
     res_data = {
         "vertex_x": np.nan,
@@ -41,40 +59,58 @@ def run_multilat_full_info(row, verbose=False):
         "time_rms": np.nan,
         "chi2": np.nan,
         "ndof": np.nan,
-        "chi2_ndof": np.nan
+        "chi2_ndof": np.nan,
     }
 
+    # Keep the existing minimum-hit requirement.
     if len(times) < 6:
         return res_data
 
+    # ------------------------------------------------------------------
+    # Run the TimeCal multilateration fit
+    # ------------------------------------------------------------------
+
     try:
         vertex = functions_multilateration.run_multilateration_candidate(
-            times, mpmt_ids, pmt_ids,
-            sigma_t=1.0,
-            early_window_ns=100.0,
-            robust_loss="soft_l1"
+            times,
+            mpmt_ids,
+            pmt_ids,
+            robust_loss="huber",
+            use_peak_window=False,
         )
 
-        if vertex["success"]:
-            residuals = vertex["pulls"]
-            time_rms = np.std(residuals)
+        if not vertex["success"]:
+            if verbose:
+                print("Multilateration failed for cluster.")
 
-            res_data.update({
-                "vertex_x": vertex["x"],
-                "vertex_y": vertex["y"],
-                "vertex_z": vertex["z"],
-                "fit_success": True,
-                "n_hits_used": vertex["n_hits_used"],
-                "time_rms": time_rms,
-                "chi2": vertex["chi2"],
-                "ndof": vertex["ndof"],
-                "chi2_ndof": vertex["chi2_ndof"]
-            })
+            return res_data
+
+        # ------------------------------------------------------------------
+        # Calculate the physical time RMS in ns
+        # ------------------------------------------------------------------
+
+        residuals_ns = vertex["residuals_ns"]
+        time_rms = np.std(residuals_ns)
+
+        # ------------------------------------------------------------------
+        # Store reconstruction results
+        # ------------------------------------------------------------------
+
+        res_data.update({
+            "vertex_x": vertex["x"],
+            "vertex_y": vertex["y"],
+            "vertex_z": vertex["z"],
+            "fit_success": True,
+            "n_hits_used": vertex["n_hits_used"],
+            "time_rms": time_rms,
+            "chi2": vertex["chi2"],
+            "ndof": vertex["ndof"],
+            "chi2_ndof": vertex["chi2_ndof"],
+        })
 
     except Exception as e:
         if verbose:
             print(f"Error in cluster: {e}")
-        pass
 
     return res_data
 
