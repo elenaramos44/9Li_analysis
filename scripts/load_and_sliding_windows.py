@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument("--entry-stop", type=int, required=True)
     parser.add_argument("--outdir", type=str, required=True)
     parser.add_argument("--base-path", type=str, required=True)
-    parser.add_argument("--death-window-ns", type=float, default=5000.0,help="Blind time after the end of a sliding window that yields a candidate (ns). Use 0 to reproduce the old behaviour.")
+    parser.add_argument("--death-window-ns", type=float, default=0.0,help="Blind time after the end of a sliding window that yields a candidate (ns). Use 0 to reproduce the old behaviour.")
     parser.add_argument("--bkg", action="store_true", help="Process background root file instead of signal")
     parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
