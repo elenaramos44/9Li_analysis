@@ -78,7 +78,7 @@ def load_geometry(
 
         for pmt_id, pmt in enumerate(mpmt.pmts):
 
-            loc = pmt.get_placement("design", _WCD)["location"]
+            loc = pmt.get_placement("est", _WCD)["location"]     #design para MC, est para data!
 
             _PMT_POS[(mpmt_id, pmt_id)] = (
                 float(loc[0]),
