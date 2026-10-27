@@ -7,7 +7,7 @@ from scipy.stats import chi2 as chi2_distribution
 
 TIMECAL_PATH = os.environ.get("TIMECAL_PATH", "/scratch/elena/TimeCal/TimeCal")
 
-N_REFRACTION = 1.373
+N_REFRACTION = 1.373    #from where is this number coming from!?
 T_SIG_NS = 0.01
 MIN_HITS = 6
 POSITION_MIN_MM = -4000.0
