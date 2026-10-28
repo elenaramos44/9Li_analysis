@@ -22,7 +22,7 @@ try:
     from TC_Multilaterator import TC_Multilaterator
 except ImportError as exc:
     raise ImportError(
-        "Could not import TC_Multilaterator from the TimeCal repository. "
+        "Could not import TC_Multilaterator from the TimeCal repository."
         f"Expected to find TC_Multilaterator.py under: {TIMECAL_PATH}. "
         "Check TIMECAL_PATH and the repository contents."
     ) from exc
@@ -31,7 +31,7 @@ try:
     import geometry_wcte
 except ImportError as exc:
     raise ImportError(
-        "Could not import geometry_wcte. Make sure the WCTE analysis "
+        "Could not import geometry_wcte. Make sure the WCTE analysis"
         "scripts directory is available in PYTHONPATH."
     ) from exc
 
